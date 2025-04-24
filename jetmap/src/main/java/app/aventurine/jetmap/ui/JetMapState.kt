@@ -7,7 +7,7 @@ import androidx.compose.ui.unit.IntSize
 
 class JetMapState(
     config: JetMapConfig,
-    val canvasSize: IntSize,
+    canvasSize: IntSize,
     tileProvider: TileProvider
 ) {
     internal val motionState: MotionState = MotionState(
