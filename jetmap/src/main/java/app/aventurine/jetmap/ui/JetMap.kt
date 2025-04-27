@@ -20,8 +20,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.runtime.getValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 @Composable
 fun JetMap(
@@ -30,31 +28,23 @@ fun JetMap(
     config: JetMapConfig,
     assetManager: AssetManager
 ) {
+    val coroutineScope = rememberCoroutineScope()
     SubcomposeLayout(
         modifier = modifier
             .fillMaxSize()
     ) { constraints ->
         val canvasSize = IntSize(constraints.maxWidth, constraints.maxHeight)
         val jetMapState = JetMapState(
+            coroutineScope = coroutineScope,
             config = config,
             canvasSize = canvasSize,
-            tileProvider = tileProvider
+            tileProvider = tileProvider,
+            assetManager = assetManager
         )
 
         val placeables = subcompose(slotId = JetMapState::class.java.name) {
-            val coroutineScope = rememberCoroutineScope()
             val motionState by jetMapState.motionController.motionState.collectAsState()
             val tileState by jetMapState.tileController.tileState.collectAsState()
-
-            coroutineScope.launch(Dispatchers.IO) {
-                jetMapState.motionController.motionState.collect { motionState ->
-                    val visibleArea = motionState.getVisibleArea(canvasSize = canvasSize)
-                    jetMapState.tileController.loadTiles(
-                        visibleArea = visibleArea,
-                        assetManager = assetManager
-                    )
-                }
-            }
 
             JetMapCanvas(
                 modifier = Modifier,
@@ -63,8 +53,8 @@ fun JetMap(
             ) {
                 drawIntoCanvas { canvas ->
                     jetMapState.tileController.draw(
-                        canvas = canvas,
-                        tiles = tileState.tiles
+                        tiles = tileState,
+                        canvas = canvas
                     )
                 }
             }

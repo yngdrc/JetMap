@@ -4,10 +4,19 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
+import java.util.concurrent.Executors
 
 data class MotionState(
     val zoom: Float,
@@ -15,7 +24,7 @@ data class MotionState(
     val centroid: Offset
 )
 
-fun MotionState.getVisibleArea(
+fun MotionState.getVisibleAreaRect(
     canvasSize: IntSize
 ): Rect {
     val rotatedCanvasRect = Rect(
@@ -31,10 +40,32 @@ fun MotionState.getVisibleArea(
     )
 }
 
+fun MotionState.getVisibleArea(
+    canvasSize: IntSize,
+    tileSize: Int
+): VisibleArea {
+    val visibleAreaRect = getVisibleAreaRect(canvasSize = canvasSize)
+    val startX = visibleAreaRect.left.toInt() / tileSize
+    val endX = visibleAreaRect.right.toInt() / tileSize
+    val startY = visibleAreaRect.top.toInt() / tileSize
+    val endY = visibleAreaRect.bottom.toInt() / tileSize
+
+    return VisibleArea(
+        startX..endX,
+        startY..endY
+    )
+}
+
+typealias VisibleArea = Pair<IntRange, IntRange>
+
 internal class MotionController(
+    parentScope: CoroutineScope,
     canvasSize: IntSize,
     config: JetMapConfig
 ) {
+    private val singleThreadDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    private val scope = CoroutineScope(parentScope.coroutineContext + singleThreadDispatcher)
+
     val minZoom: Float
     val maxZoom: Float = config.maxZoom
     val initialCentroid: Offset
@@ -66,6 +97,22 @@ internal class MotionController(
     )
 
     val motionState: StateFlow<MotionState> = _motionState.asStateFlow()
+    val visibleAreaFlow: Flow<VisibleArea> = _motionState.map { motionState ->
+        motionState.getVisibleArea(
+            canvasSize = canvasSize,
+            tileSize = config.tileSize
+        )
+    }.filter { visibleArea ->
+        val (startX, endX) = visibleArea.first.start to visibleArea.first.endInclusive
+        val (startY, endY) = visibleArea.second.start to visibleArea.second.endInclusive
+
+        startX >= 0 && endX <= config.xTileCount
+                && startY >= 0 && endY <= config.yTileCount
+    }.distinctUntilChanged().shareIn(
+        scope = scope,
+        started = SharingStarted.WhileSubscribed(),
+        replay = 1
+    )
 
     fun onGesture(
         centroid: Offset,
