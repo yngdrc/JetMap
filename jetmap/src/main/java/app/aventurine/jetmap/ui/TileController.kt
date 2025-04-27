@@ -90,8 +90,8 @@ class TileController(
         tileDescriptor: TileDescriptor
     ): Tile? {
         val tileBitmap = tileProvider.getTileInputStream(
-            x = tileDescriptor.x * config.tileSize,
-            y = tileDescriptor.y * config.tileSize,
+            x = tileDescriptor.x,
+            y = tileDescriptor.y,
             assetManager = assetManager
         )?.use { inputStream ->
             try {

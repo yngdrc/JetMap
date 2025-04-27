@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     JetMap(
                         modifier = Modifier.padding(innerPadding),
-                        tileProvider = TileProvider(),
+                        tileProvider = TileProvider(tileSize = 256),
                         config = JetMapConfig(
                             tileSize = 256,
                             mapSize = IntSize(2560, 2048)

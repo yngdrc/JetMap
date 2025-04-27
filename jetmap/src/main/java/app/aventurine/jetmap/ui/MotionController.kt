@@ -35,7 +35,7 @@ fun MotionState.getVisibleAreaRect(
         offset = centroid.rotateBy(
             angle = -rotation
         ) + rotatedCanvasRect.topLeft,
-        size = rotatedCanvasRect.size / zoom
+        size = rotatedCanvasRect.size
     )
 }
 
