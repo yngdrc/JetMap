@@ -50,6 +50,13 @@ class TileController(
     internal suspend fun onVisibleAreaChanged(
         visibleArea: VisibleArea
     ) {
+        recycleTiles(visibleArea = visibleArea)
+        getTiles(visibleArea = visibleArea)
+    }
+
+    private fun recycleTiles(
+        visibleArea: VisibleArea
+    ) {
         val tilesToRecycle = _tileState.value.filter { tile ->
             tile.x !in visibleArea.first || tile.y !in visibleArea.second
         }
@@ -59,14 +66,19 @@ class TileController(
         }
 
         tilesToRecycle.forEach { tile -> tile.bitmap.recycle() }
-        getTiles(visibleArea = visibleArea)
     }
 
     private suspend fun getTiles(
         visibleArea: VisibleArea
     ) {
-        visibleArea.first.map { x ->
-            visibleArea.second.map { y ->
+        visibleArea.first.mapNotNull { x ->
+            if (x !in 0..config.xTileCount - 1)
+                return@mapNotNull null
+
+            visibleArea.second.mapNotNull { y ->
+                if (y !in 0..config.yTileCount - 1)
+                    return@mapNotNull null
+
                 TileDescriptor(x = x, y = y)
             }
         }.flatten().forEach { tileDescriptor ->

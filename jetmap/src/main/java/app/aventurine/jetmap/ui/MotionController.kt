@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
@@ -102,12 +101,6 @@ internal class MotionController(
             canvasSize = canvasSize,
             tileSize = config.tileSize
         )
-    }.filter { visibleArea ->
-        val (startX, endX) = visibleArea.first.start to visibleArea.first.endInclusive
-        val (startY, endY) = visibleArea.second.start to visibleArea.second.endInclusive
-
-        startX >= 0 && endX <= config.xTileCount
-                && startY >= 0 && endY <= config.yTileCount
     }.distinctUntilChanged().shareIn(
         scope = scope,
         started = SharingStarted.WhileSubscribed(),
