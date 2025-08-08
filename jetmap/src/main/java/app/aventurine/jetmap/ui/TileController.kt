@@ -4,17 +4,36 @@ import android.content.res.AssetManager
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.util.fastDistinctBy
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.consume
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.consumeAsFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Queue
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedTransferQueue
+import java.util.concurrent.SynchronousQueue
 
 class TileController(
     parentScope: CoroutineScope,
@@ -22,12 +41,15 @@ class TileController(
     val config: JetMapConfig,
     val assetManager: AssetManager
 ) {
-    private val singleThreadDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    private val scope = CoroutineScope(parentScope.coroutineContext + singleThreadDispatcher)
+    private val scope: CoroutineScope = CoroutineScope(
+        parentScope.coroutineContext + SupervisorJob()
+    )
 
     private val _renderTilesFlow: MutableSharedFlow<TileDescriptor> = MutableSharedFlow()
 
-    private val _tileState: MutableStateFlow<Collection<Tile>> = MutableStateFlow(emptyList())
+    private val _tileState: MutableStateFlow<Collection<Tile>> =
+        MutableStateFlow(emptyList())
+
     val tileState: StateFlow<Collection<Tile>> = _tileState.asStateFlow()
 
     init {
@@ -86,16 +108,18 @@ class TileController(
         }
     }
 
-    private fun getTile(
+    private suspend fun getTile(
         tileDescriptor: TileDescriptor
     ): Tile? {
-        val tileBitmap = tileProvider.getTileInputStream(
-            x = tileDescriptor.x,
-            y = tileDescriptor.y,
-            assetManager = assetManager
-        )?.use { inputStream ->
+        val tileBitmap = withContext(Dispatchers.IO) {
             try {
-                BitmapFactory.decodeStream(inputStream)
+                tileProvider.getTileInputStream(
+                    x = tileDescriptor.x,
+                    y = tileDescriptor.y,
+                    assetManager = assetManager
+                )?.use(BitmapFactory::decodeStream)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 null
             }

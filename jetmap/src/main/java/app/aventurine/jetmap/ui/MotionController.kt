@@ -2,9 +2,12 @@ package app.aventurine.jetmap.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.DrawTransform
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
@@ -62,9 +66,6 @@ internal class MotionController(
     canvasSize: IntSize,
     config: JetMapConfig
 ) {
-    private val singleThreadDispatcher = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-    private val scope = CoroutineScope(parentScope.coroutineContext + singleThreadDispatcher)
-
     val minZoom: Float
     val maxZoom: Float = config.maxZoom
     val initialCentroid: Offset
@@ -101,11 +102,7 @@ internal class MotionController(
             canvasSize = canvasSize,
             tileSize = config.tileSize
         )
-    }.distinctUntilChanged().shareIn(
-        scope = scope,
-        started = SharingStarted.WhileSubscribed(),
-        replay = 1
-    )
+    }.distinctUntilChanged().flowOn(Dispatchers.Default)
 
     fun onGesture(
         centroid: Offset,
@@ -125,5 +122,17 @@ internal class MotionController(
                 centroid = newCentroid
             )
         }
+    }
+
+    fun transformCanvas(
+        motionState: MotionState
+    ): DrawTransform.() -> Unit = {
+        translate(
+            left = -motionState.centroid.x * motionState.zoom,
+            top = -motionState.centroid.y * motionState.zoom
+        )
+
+        scale(scale = motionState.zoom, pivot = Offset.Zero)
+        rotate(degrees = motionState.rotation, pivot = Offset.Zero)
     }
 }

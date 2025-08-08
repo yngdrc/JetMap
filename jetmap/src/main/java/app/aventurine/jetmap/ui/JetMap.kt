@@ -20,6 +20,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun JetMap(
@@ -43,13 +44,15 @@ fun JetMap(
         )
 
         val placeables = subcompose(slotId = JetMapState::class.java.name) {
-            val motionState by jetMapState.motionController.motionState.collectAsState()
-            val tileState by jetMapState.tileController.tileState.collectAsState()
+            val motionState by jetMapState.motionController.motionState.collectAsStateWithLifecycle()
+            val tileState by jetMapState.tileController.tileState.collectAsStateWithLifecycle()
 
             JetMapCanvas(
                 modifier = Modifier,
                 onGesture = jetMapState.motionController::onGesture,
-                transformBlock = jetMapState.transformCanvas(motionState = motionState)
+                transformBlock = jetMapState.motionController.transformCanvas(
+                    motionState = motionState
+                )
             ) {
                 drawIntoCanvas { canvas ->
                     jetMapState.tileController.draw(
