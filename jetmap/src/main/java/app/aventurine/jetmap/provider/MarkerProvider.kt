@@ -1,7 +1,6 @@
 package app.aventurine.jetmap.provider
 
 import androidx.compose.ui.geometry.Rect
-import app.aventurine.jetmap.controller.VisibleArea
 import app.aventurine.jetmap.models.Marker
 
 interface MarkerProvider {

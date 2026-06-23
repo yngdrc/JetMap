@@ -1,38 +1,35 @@
 package app.aventurine.jetmap.ui
 
-import android.content.res.Resources
-import android.graphics.BitmapFactory
 import androidx.compose.ui.unit.IntSize
-import app.aventurine.jetmap.controller.GestureController
-import app.aventurine.jetmap.controller.MarkerController
-import app.aventurine.jetmap.controller.MotionController
-import app.aventurine.jetmap.controller.TileController
-import app.aventurine.jetmap.controller.getVisibleAreaRect
-import app.aventurine.jetmap.models.Marker
+import app.aventurine.jetmap.controller.gesture.GestureApi
+import app.aventurine.jetmap.controller.gesture.GestureController
+import app.aventurine.jetmap.controller.marker.MarkerApi
+import app.aventurine.jetmap.controller.marker.MarkerController
+import app.aventurine.jetmap.controller.motion.MotionApi
+import app.aventurine.jetmap.controller.motion.MotionController
+import app.aventurine.jetmap.controller.tile.TileApi
+import app.aventurine.jetmap.controller.tile.TileController
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.provider.TileProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlin.time.DurationUnit
+import kotlin.time.toDuration
 
 class JetMapState(
     val config: JetMapConfig,
-    canvasSize: IntSize,
     tileProvider: TileProvider,
-    markerProvider: MarkerProvider,
-    resources: Resources
+    markerProvider: MarkerProvider
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    internal val motionController: MotionController = MotionController(
-        parentScope = scope,
-        canvasSize = canvasSize,
-        config = config
-    )
+
+    internal lateinit var motionController: MotionController
 
     internal val tileController: TileController = TileController(
         parentScope = scope,
@@ -48,47 +45,73 @@ class JetMapState(
 
     internal val gestureController: GestureController = GestureController()
 
-    init {
+    val motionApi: MotionApi
+        get() = motionController
+
+    val tileApi: TileApi
+        get() = tileController
+
+    val markerApi: MarkerApi
+        get() = markerController
+
+    val gestureApi: GestureApi
+        get() = gestureController
+
+    internal fun initialize(canvasSize: IntSize) {
+        motionController = MotionController(
+            parentScope = scope,
+            canvasSize = canvasSize,
+            config = config,
+        )
+
+        collectStates(canvasSize = canvasSize)
+    }
+
+    private fun collectStates(
+        canvasSize: IntSize
+    ) {
         scope.launch {
             motionController.visibleAreaFlow.combine(
                 flow = motionController.levelState
             ) { visibleArea, level ->
                 visibleArea to level
-            }.collect { (visibleArea, level) ->
+            }.collectLatest { (visibleArea, level) ->
                 tileController.onVisibleAreaChanged(visibleArea = visibleArea, level = level)
             }
         }
 
         scope.launch {
-            motionController.motionState.combine(
-                flow = motionController.levelState
-            ) { motionState, level ->
-                motionState to level
-            }.buffer(capacity = 0).collect { (motionState, level) ->
-                markerController.onVisibleAreaChanged(
-                    visibleAreaRect = motionState.getVisibleAreaRect(canvasSize = canvasSize),
-                    level = level
-                )
-            }
+            motionController.motionState
+                .debounce(timeout = 300.toDuration(DurationUnit.MILLISECONDS))
+                .combine(
+                    flow = motionController.levelState
+                ) { motionState, level ->
+                    motionState to level
+                }.buffer(capacity = 0).collectLatest { (motionState, level) ->
+                    markerController.onVisibleAreaChanged(
+                        visibleAreaRect = motionState.getVisibleAreaRect(canvasSize = canvasSize),
+                        level = level
+                    )
+                }
         }
 
         scope.launch {
-            markerController.markerState.combine(
-                flow = motionController.levelState
-            ) { markerState, levelState ->
-                markerState to levelState
-            }.combine(
-                flow = gestureController.tapState.filterNotNull()
-            ) { (markerState, levelState), tapState ->
-                val existingMarker = markerState.firstOrNull { marker ->
-                    marker.x.toFloat() in tapState.x - 15..tapState.x + 15
-                            && marker.y.toFloat() in tapState.y - 15..tapState.y + 15
+            gestureController.tapState.collectLatest { tapState ->
+                if (tapState == null) {
+                    return@collectLatest
                 }
 
-                tapState to existingMarker
-            }.collect { (tapState, existingMarker) ->
+                val markerState = markerController.markerState.value
+                val existingMarker = markerState.firstOrNull { marker ->
+                    val xOffset = marker.bitmap.width / 2
+                    val yOffset = marker.bitmap.height / 2
+
+                    marker.x.toFloat() in tapState.x - xOffset..tapState.x + xOffset
+                            && marker.y.toFloat() in tapState.y - yOffset..tapState.y + yOffset
+                }
+
                 gestureController.onMarkerFocusChanged(
-                    offset = tapState,
+                    tapState = tapState,
                     existingMarker = existingMarker
                 )
             }

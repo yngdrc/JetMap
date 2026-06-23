@@ -116,7 +116,7 @@ class MarkerExtractor(
                     val y1 = iterator.next()
                     val y2 = iterator.next()
                     val y3 = iterator.next()
-                    dataMap[MarkerProperty.Y] = y1 + 0x80 * y2 + 0x4000 * y3 - 0x4080 + jetMapConfig.mapSize.height / 2
+                    dataMap[MarkerProperty.Y] = y1 + 0x80 * y2 + 0x4000 * y3 - 0x4080 + jetMapConfig.mapSize.height
 
                     property = MarkerProperty.Z_BLOCK_START
                 }

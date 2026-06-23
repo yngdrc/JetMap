@@ -1,7 +1,7 @@
 package app.aventurine.jetmap.ui
 
 import androidx.compose.ui.unit.IntSize
-import app.aventurine.jetmap.controller.VisibleArea
+import app.aventurine.jetmap.controller.motion.VisibleArea
 
 data class JetMapConfig(
     val tileSize: Int,

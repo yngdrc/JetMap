@@ -2,14 +2,16 @@ package app.aventurine.jetmapdemo.ui.viewModels
 
 import android.content.res.AssetManager
 import android.content.res.Resources
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.ui.geometry.Rect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.aventurine.jetmap.controller.VisibleArea
 import app.aventurine.jetmap.models.Marker
+import app.aventurine.jetmap.provider.AssetTileProvider
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmap.ui.JetMapState
 import app.aventurine.jetmapdemo.MarkerExtractor
 import app.aventurine.jetmapdemo.data.models.marker.MarkerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,13 +25,6 @@ class MainViewModel @Inject constructor(
     private val resources: Resources,
     private val markerRepository: MarkerRepository
 ) : ViewModel() {
-    val jetMapConfig = JetMapConfig(
-        tileSize = 256,
-        leftMostTileCoordinate = 31744,
-        rightMostTileCoordinate = 34048,
-        topMostTileCoordinate = 30976,
-        bottomMostTileCoordinate = 32768,
-    )
 
     val markerProvider = object : MarkerProvider {
         override suspend fun getMarker(
@@ -42,7 +37,14 @@ class MainViewModel @Inject constructor(
                 x = markerEntity.x,
                 y = markerEntity.y,
                 z = markerEntity.floorId,
-                bitmap = BitmapFactory.decodeResource(resources, markerEntity.iconDrawableRes),
+                bitmap = BitmapFactory.decodeResource(
+                    resources,
+                    markerEntity.iconDrawableRes,
+                    BitmapFactory.Options().apply {
+                        inScaled = false
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                ),
                 description = markerEntity.description
             )
         }
@@ -64,7 +66,10 @@ class MainViewModel @Inject constructor(
                     bitmap = BitmapFactory.decodeResource(
                         resources,
                         markerEntity.iconDrawableRes,
-                        BitmapFactory.Options()
+                        BitmapFactory.Options().apply {
+                            inScaled = false
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        }
                     ),
                     description = markerEntity.description
                 )
@@ -72,13 +77,25 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    val jetMapState = JetMapState(
+        config = JetMapConfig(
+            tileSize = 256,
+            leftMostTileCoordinate = 31744,
+            rightMostTileCoordinate = 34048,
+            topMostTileCoordinate = 30976,
+            bottomMostTileCoordinate = 32768,
+        ),
+        tileProvider = AssetTileProvider(tileSize = 256, assetManager = assetManager),
+        markerProvider = markerProvider
+    )
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             MarkerExtractor(
                 assetManager = assetManager,
                 resources = resources,
                 markerRepository = markerRepository,
-                jetMapConfig = jetMapConfig
+                jetMapConfig = jetMapState.config
             ).extractMarkers()
         }
     }
