@@ -1,4 +1,4 @@
-package app.aventurine.jetmap.ui
+package app.aventurine.jetmap.controller
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -6,20 +6,19 @@ import androidx.compose.ui.graphics.drawscope.DrawTransform
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
+import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmap.utils.rotateBy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
-import java.util.concurrent.Executors
 
 data class MotionState(
     val zoom: Float,
@@ -76,7 +75,7 @@ internal class MotionController(
 
         minZoom = canvasSizeBasedZoom.coerceIn(
             minimumValue = config.minZoom,
-            maximumValue = config.maxZoom
+            maximumValue = maxZoom
         )
 
         initialCentroid = Offset(
@@ -88,6 +87,9 @@ internal class MotionController(
         )
     }
 
+    private val _levelState = MutableStateFlow(7)
+    val levelState: StateFlow<Int> = _levelState.asStateFlow()
+
     private val _motionState: MutableStateFlow<MotionState> = MutableStateFlow(
         MotionState(
             zoom = minZoom,
@@ -97,6 +99,7 @@ internal class MotionController(
     )
 
     val motionState: StateFlow<MotionState> = _motionState.asStateFlow()
+
     val visibleAreaFlow: Flow<VisibleArea> = _motionState.map { motionState ->
         motionState.getVisibleArea(
             canvasSize = canvasSize,
@@ -121,6 +124,14 @@ internal class MotionController(
                 rotation = motionState.rotation + rotation,
                 centroid = newCentroid
             )
+        }
+    }
+
+    fun changeLevel(
+        levelUpdateScope: (Int) -> Int
+    ) {
+        _levelState.update { currentLevel ->
+            levelUpdateScope(currentLevel)
         }
     }
 

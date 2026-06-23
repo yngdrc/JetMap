@@ -1,45 +1,31 @@
-package app.aventurine.jetmap.ui
+package app.aventurine.jetmap.controller
 
-import android.content.res.AssetManager
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.util.fastDistinctBy
+import androidx.compose.ui.unit.dp
+import androidx.core.graphics.scale
+import app.aventurine.jetmap.provider.TileProvider
+import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmap.models.Tile
+import app.aventurine.jetmap.descriptor.TileDescriptor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.async
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.channels.consume
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.util.Queue
-import java.util.concurrent.Executors
-import java.util.concurrent.LinkedTransferQueue
-import java.util.concurrent.SynchronousQueue
 
 class TileController(
     parentScope: CoroutineScope,
     val tileProvider: TileProvider,
-    val config: JetMapConfig,
-    val assetManager: AssetManager
+    val config: JetMapConfig
 ) {
     private val scope: CoroutineScope = CoroutineScope(
         parentScope.coroutineContext + SupervisorJob()
@@ -54,12 +40,13 @@ class TileController(
 
     init {
         scope.launch {
-            _renderTilesFlow
-                .map(::getTile)
-                .filterNotNull()
+            _renderTilesFlow.mapNotNull(::getTile)
                 .collect { tile ->
                     _tileState.update { tileState ->
-                        val existingTile = tileState.find { it.x == tile.x && it.y == tile.y }
+                        val existingTile = tileState.find {
+                            it.x == tile.x && it.y == tile.y && it.z == tile.z
+                        }
+
                         if (existingTile != null)
                             return@update tileState
 
@@ -70,18 +57,20 @@ class TileController(
     }
 
     internal suspend fun onVisibleAreaChanged(
-        visibleArea: VisibleArea
+        visibleArea: VisibleArea,
+        level: Int
     ) {
-        recycleTiles(visibleArea = visibleArea)
-        getTiles(visibleArea = visibleArea)
+        recycleTiles(visibleArea = visibleArea, level = level)
+        getTiles(visibleArea = visibleArea, level = level)
     }
 
     private fun recycleTiles(
-        visibleArea: VisibleArea
+        visibleArea: VisibleArea,
+        level: Int
     ) {
         val tilesToRecycle = _tileState.value.filter { tile ->
-            tile.x !in visibleArea.first || tile.y !in visibleArea.second
-        }
+            tile.x !in visibleArea.first || tile.y !in visibleArea.second || tile.z != level
+        }.toSet()
 
         _tileState.update { tiles ->
             tiles.minus(tilesToRecycle)
@@ -91,17 +80,18 @@ class TileController(
     }
 
     private suspend fun getTiles(
-        visibleArea: VisibleArea
+        visibleArea: VisibleArea,
+        level: Int
     ) {
         visibleArea.first.mapNotNull { x ->
-            if (x !in 0..config.xTileCount - 1)
+            if (x !in 0..<config.xTileCount)
                 return@mapNotNull null
 
             visibleArea.second.mapNotNull { y ->
-                if (y !in 0..config.yTileCount - 1)
+                if (y !in 0..<config.yTileCount)
                     return@mapNotNull null
 
-                TileDescriptor(x = x, y = y)
+                TileDescriptor(x = x, y = y, z = level)
             }
         }.flatten().forEach { tileDescriptor ->
             _renderTilesFlow.emit(tileDescriptor)
@@ -116,7 +106,7 @@ class TileController(
                 tileProvider.getTileInputStream(
                     x = tileDescriptor.x,
                     y = tileDescriptor.y,
-                    assetManager = assetManager
+                    z = tileDescriptor.z
                 )?.use(BitmapFactory::decodeStream)
             } catch (e: CancellationException) {
                 throw e
@@ -125,7 +115,12 @@ class TileController(
             }
         } ?: return null
 
-        return Tile(x = tileDescriptor.x, y = tileDescriptor.y, bitmap = tileBitmap)
+        return Tile(
+            x = tileDescriptor.x,
+            y = tileDescriptor.y,
+            z = tileDescriptor.z,
+            bitmap = tileBitmap
+        )
     }
 
     fun draw(

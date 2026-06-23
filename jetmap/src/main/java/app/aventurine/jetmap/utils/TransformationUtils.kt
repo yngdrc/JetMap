@@ -1,4 +1,4 @@
-package app.aventurine.jetmap.ui
+package app.aventurine.jetmap.utils
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
