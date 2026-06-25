@@ -34,7 +34,7 @@ internal class GestureController : GestureApi {
             existingMarker?.let { marker ->
                 Offset(marker.x.toFloat(), marker.y.toFloat())
             } ?: tapState,
-            existingMarker?.description ?: "${tapState.x}, ${tapState.y}",
+            existingMarker?.description ?: "${tapState.x.toInt()}, ${tapState.y.toInt()}",
             existingMarker != null
         )
     }

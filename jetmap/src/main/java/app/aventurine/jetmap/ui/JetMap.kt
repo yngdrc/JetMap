@@ -1,5 +1,7 @@
 package app.aventurine.jetmap.ui
 
+import android.graphics.Paint
+import android.graphics.Path
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -53,6 +55,9 @@ fun JetMap(
             val motionState by jetMapState.motionController.motionState.collectAsStateWithLifecycle()
             val tileState by jetMapState.tileController.tileState.collectAsStateWithLifecycle()
             val markerState by jetMapState.markerController.markerState.collectAsStateWithLifecycle()
+            val pathState by jetMapState.pathfindingController.pathState.collectAsStateWithLifecycle(
+                null
+            )
             val focusedMarkerState by jetMapState.gestureController.focusedMarker
             val pinBitmap = ImageBitmap.imageResource(id = myLocationResId).asAndroidBitmap()
 
@@ -88,8 +93,31 @@ fun JetMap(
                     )
                 }
 
+                pathState?.let { pathState ->
+                    drawIntoCanvas { canvas ->
+                        val path = Path().apply {
+                            pathState.pathData.forEachIndexed { index, offset ->
+                                val previous =
+                                    pathState.pathData.getOrNull(index - 1) ?: return@forEachIndexed
+
+                                moveTo(previous.x.toFloat(), previous.y.toFloat())
+                                lineTo(offset.x.toFloat(), offset.y.toFloat())
+                            }
+                        }
+
+                        canvas.nativeCanvas.drawPath(
+                            path,
+                            Paint().apply {
+                                style = Paint.Style.STROKE
+                                color = android.graphics.Color.YELLOW
+                                strokeWidth = 1f
+                            }
+                        )
+                    }
+                }
+
                 focusedMarkerState?.let { marker ->
-                    if (marker.third) return@JetMapCanvas
+                    if (marker.third) return@let
                     drawIntoCanvas { canvas ->
                         canvas.nativeCanvas.drawBitmap(
                             pinBitmap,

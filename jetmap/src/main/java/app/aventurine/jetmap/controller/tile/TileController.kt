@@ -1,6 +1,9 @@
 package app.aventurine.jetmap.controller.tile
 
 import android.graphics.BitmapFactory
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.nativeCanvas
 import app.aventurine.jetmap.controller.motion.VisibleArea
@@ -16,6 +19,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,30 +40,36 @@ class TileController(
     private val _tileState: MutableStateFlow<TileState> = MutableStateFlow(emptyList())
     override val tileState: StateFlow<TileState> = _tileState.asStateFlow()
 
+    private val _terrainState: MutableStateFlow<TerrainType> =
+        MutableStateFlow(TerrainType.NORMAL)
+
+    override val terrainState: StateFlow<TerrainType> = _terrainState.asStateFlow()
+
     init {
         scope.launch {
             _renderTilesFlow.mapNotNull(::getTile)
                 .collect { tile ->
-                    _tileState.update { tileState ->
-                        val existingTile = tileState.find {
-                            it.x == tile.x && it.y == tile.y && it.z == tile.z
-                        }
-
-                        if (existingTile != null)
-                            return@update tileState
-
-                        tileState.plus(tile)
+                _tileState.update { tileState ->
+                    val existingTile = tileState.find {
+                        it.x == tile.x && it.y == tile.y && it.z == tile.z
                     }
+
+                    if (existingTile != null)
+                        return@update tileState
+
+                    tileState.plus(tile)
                 }
+            }
         }
     }
 
     internal suspend fun onVisibleAreaChanged(
         visibleArea: VisibleArea,
-        level: Int
+        level: Int,
+        terrainType: TerrainType
     ) {
         recycleTiles(visibleArea = visibleArea, level = level)
-        getTiles(visibleArea = visibleArea, level = level)
+        getTiles(visibleArea = visibleArea, level = level, terrainType = terrainType)
     }
 
     private fun recycleTiles(
@@ -78,7 +89,8 @@ class TileController(
 
     private suspend fun getTiles(
         visibleArea: VisibleArea,
-        level: Int
+        level: Int,
+        terrainType: TerrainType
     ) {
         visibleArea.first.mapNotNull { x ->
             if (x !in 0..<config.xTileCount)
@@ -88,7 +100,7 @@ class TileController(
                 if (y !in 0..<config.yTileCount)
                     return@mapNotNull null
 
-                TileDescriptor(x = x, y = y, z = level)
+                TileDescriptor(x = x, y = y, z = level, terrainType = terrainType)
             }
         }.flatten().forEach { tileDescriptor ->
             _renderTilesFlow.emit(tileDescriptor)
@@ -103,7 +115,8 @@ class TileController(
                 tileProvider.getTileInputStream(
                     x = tileDescriptor.x,
                     y = tileDescriptor.y,
-                    z = tileDescriptor.z
+                    z = tileDescriptor.z,
+                    terrainType = tileDescriptor.terrainType
                 )?.use(BitmapFactory::decodeStream)
             } catch (e: CancellationException) {
                 throw e

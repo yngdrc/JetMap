@@ -29,7 +29,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class MarkerController(
+internal class MarkerController(
     parentScope: CoroutineScope,
     val markerProvider: MarkerProvider,
     val config: JetMapConfig
@@ -136,7 +136,7 @@ class MarkerController(
                         Paint().apply {
                             isFilterBitmap = false
                             colorFilter = PorterDuffColorFilter(
-                                Color.Blue.copy(alpha = 0.2f).toArgb(),
+                                Color.White.copy(alpha = 0.2f).toArgb(),
                                 PorterDuff.Mode.SRC_ATOP
                             )
                         }

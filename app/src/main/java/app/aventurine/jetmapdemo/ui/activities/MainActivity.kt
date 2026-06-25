@@ -84,10 +84,14 @@ class MainActivity : ComponentActivity() {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(text = focusedMarker.second)
+                                Column {
+                                    Text(text = focusedMarker.second)
+                                }
+
                                 IconButton(
                                     onClick = {
                                         mainViewModel.jetMapState.gestureApi.clear()
+                                        mainViewModel.jetMapState.pathfindingController.clear()
                                     }
                                 ) {
                                     Text(text = "Close")
@@ -106,7 +110,9 @@ class MainActivity : ComponentActivity() {
                         )
 
                         Column(
-                            modifier = Modifier.fillMaxSize().padding(innerPadding),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding),
                             verticalArrangement = Arrangement.Bottom,
                             horizontalAlignment = Alignment.End
                         ) {

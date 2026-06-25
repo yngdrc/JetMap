@@ -86,7 +86,8 @@ class MainViewModel @Inject constructor(
             bottomMostTileCoordinate = 32768,
         ),
         tileProvider = AssetTileProvider(tileSize = 256, assetManager = assetManager),
-        markerProvider = markerProvider
+        markerProvider = markerProvider,
+        assetManager = assetManager
     )
 
     init {

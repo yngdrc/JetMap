@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "app.aventurine.jetmap"
-        minSdk = 23
+        minSdk = 24
         versionCode = 1
         versionName = "1.0"
 

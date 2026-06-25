@@ -1,5 +1,8 @@
 package app.aventurine.jetmap.ui
 
+import android.content.res.AssetManager
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import app.aventurine.jetmap.controller.gesture.GestureApi
 import app.aventurine.jetmap.controller.gesture.GestureController
@@ -7,10 +10,13 @@ import app.aventurine.jetmap.controller.marker.MarkerApi
 import app.aventurine.jetmap.controller.marker.MarkerController
 import app.aventurine.jetmap.controller.motion.MotionApi
 import app.aventurine.jetmap.controller.motion.MotionController
+import app.aventurine.jetmap.controller.pathfinding.AStarPathFinder
+import app.aventurine.jetmap.controller.pathfinding.PathfindingController
 import app.aventurine.jetmap.controller.tile.TileApi
 import app.aventurine.jetmap.controller.tile.TileController
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.provider.TileProvider
+import app.aventurine.jetmap.utils.MinimapStitcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,7 +31,8 @@ import kotlin.time.toDuration
 class JetMapState(
     val config: JetMapConfig,
     tileProvider: TileProvider,
-    markerProvider: MarkerProvider
+    markerProvider: MarkerProvider,
+    assetManager: AssetManager
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -44,6 +51,11 @@ class JetMapState(
     )
 
     internal val gestureController: GestureController = GestureController()
+    val pathfindingController: PathfindingController = PathfindingController(
+        parentScope = scope,
+        pathFinder = AStarPathFinder(),
+        mapStitcher = MinimapStitcher(assetManager = assetManager)
+    )
 
     val motionApi: MotionApi
         get() = motionController
@@ -75,8 +87,14 @@ class JetMapState(
                 flow = motionController.levelState
             ) { visibleArea, level ->
                 visibleArea to level
-            }.collectLatest { (visibleArea, level) ->
-                tileController.onVisibleAreaChanged(visibleArea = visibleArea, level = level)
+            }.combine(flow = tileController.terrainState) { (visibleArea, level), terrainType ->
+                Triple(visibleArea, level, terrainType)
+            }.collectLatest { (visibleArea, level, terrainType) ->
+                tileController.onVisibleAreaChanged(
+                    visibleArea = visibleArea,
+                    level = level,
+                    terrainType = terrainType
+                )
             }
         }
 
@@ -113,6 +131,33 @@ class JetMapState(
                 gestureController.onMarkerFocusChanged(
                     tapState = tapState,
                     existingMarker = existingMarker
+                )
+            }
+        }
+
+        scope.launch(Dispatchers.Default) {
+            gestureController.tapState.collectLatest { tapState ->
+                if (tapState == null) {
+                    return@collectLatest
+                }
+
+                val markerState = markerController.markerState.value
+                val existingMarker = markerState.firstOrNull { marker ->
+                    val xOffset = marker.bitmap.width / 2
+                    val yOffset = marker.bitmap.height / 2
+
+                    marker.x.toFloat() in tapState.x - xOffset..tapState.x + xOffset
+                            && marker.y.toFloat() in tapState.y - yOffset..tapState.y + yOffset
+                }
+
+                pathfindingController.findPath(
+                    startingPoint = existingMarker?.let { marker ->
+                        IntOffset(marker.x, marker.y)
+                    } ?: IntOffset(
+                        x = tapState.x.toInt(),
+                        y = tapState.y.toInt()
+                    ),
+                    endingPoint = IntOffset(x = 601, y = 1244)
                 )
             }
         }

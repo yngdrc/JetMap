@@ -1,5 +1,6 @@
 package app.aventurine.jetmap.provider
 
+import app.aventurine.jetmap.controller.tile.TerrainType
 import java.io.InputStream
 import java.net.URL
 
@@ -9,7 +10,8 @@ class UrlTileProvider(
     override fun getTileInputStream(
         x: Int,
         y: Int,
-        z: Int
+        z: Int,
+        terrainType: TerrainType
     ): InputStream {
         return URL("https://aventurine.app/api/tiles?x=${x * tileSize + 31744}&y=${y * tileSize + 30976}&floorId=$z").openStream()
     }
