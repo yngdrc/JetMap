@@ -13,4 +13,6 @@ abstract class MarkerRepository(
         coordinates: JetMapConfig.Coordinates,
         floorId: Int
     ): Collection<MarkerEntity>
+
+    abstract suspend fun search(query: String): List<MarkerEntity>
 }

@@ -71,7 +71,12 @@ class AStarPathFinder {
             IntOffset(x - 1, y),
             IntOffset(x + 1, y),
         ).mapNotNull { offset ->
-            val pixel = mapBitmap[offset.x, offset.y]
+            val pixel = try {
+                mapBitmap[offset.x, offset.y]
+            } catch (e: Exception) {
+                return@mapNotNull null
+            }
+
             val r = Color.red(pixel)
             val g = Color.green(pixel)
             val b = Color.blue(pixel)
@@ -89,7 +94,12 @@ class AStarPathFinder {
             IntOffset(x + 1, y + 1),
             IntOffset(x - 1, y + 1),
         ).mapNotNull { offset ->
-            val pixel = mapBitmap[offset.x, offset.y]
+            val pixel = try {
+                mapBitmap[offset.x, offset.y]
+            } catch (e: Exception) {
+                return@mapNotNull null
+            }
+
             val r = Color.red(pixel)
             val g = Color.green(pixel)
             val b = Color.blue(pixel)

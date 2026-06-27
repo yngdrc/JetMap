@@ -1,11 +1,16 @@
-package app.aventurine.jetmap.ui
+package app.aventurine.jetmap.controller
 
 import android.content.res.AssetManager
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.RememberObserver
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import app.aventurine.jetmap.controller.gesture.GestureApi
-import app.aventurine.jetmap.controller.gesture.GestureController
+import app.aventurine.jetmap.controller.gesture.GestureControllerImpl
 import app.aventurine.jetmap.controller.marker.MarkerApi
 import app.aventurine.jetmap.controller.marker.MarkerController
 import app.aventurine.jetmap.controller.motion.MotionApi
@@ -16,19 +21,24 @@ import app.aventurine.jetmap.controller.tile.TileApi
 import app.aventurine.jetmap.controller.tile.TileController
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.provider.TileProvider
+import app.aventurine.jetmap.ui.JetMapConfig
 import app.aventurine.jetmap.utils.MinimapStitcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.time.DurationUnit
 import kotlin.time.toDuration
 
-class JetMapState(
+class JetMapController(
     val config: JetMapConfig,
     tileProvider: TileProvider,
     markerProvider: MarkerProvider,
@@ -50,26 +60,24 @@ class JetMapState(
         config = config
     )
 
-    internal val gestureController: GestureController = GestureController()
+    internal val gestureController: GestureControllerImpl = GestureControllerImpl()
     val pathfindingController: PathfindingController = PathfindingController(
         parentScope = scope,
         pathFinder = AStarPathFinder(),
         mapStitcher = MinimapStitcher(assetManager = assetManager)
     )
 
+    private val _initializationState: MutableState<Boolean> = mutableStateOf(false)
+    val initializationState: State<Boolean> = _initializationState
+
     val motionApi: MotionApi
         get() = motionController
-
-    val tileApi: TileApi
-        get() = tileController
-
-    val markerApi: MarkerApi
-        get() = markerController
 
     val gestureApi: GestureApi
         get() = gestureController
 
-    internal fun initialize(canvasSize: IntSize) {
+    fun initialize(canvasSize: IntSize) {
+        _initializationState.value = false
         motionController = MotionController(
             parentScope = scope,
             canvasSize = canvasSize,
@@ -77,6 +85,7 @@ class JetMapState(
         )
 
         collectStates(canvasSize = canvasSize)
+        _initializationState.value = true
     }
 
     private fun collectStates(
@@ -119,6 +128,7 @@ class JetMapState(
                     return@collectLatest
                 }
 
+                motionController.moveTo(offset = tapState, 5f)
                 val markerState = markerController.markerState.value
                 val existingMarker = markerState.firstOrNull { marker ->
                     val xOffset = marker.bitmap.width / 2
@@ -135,31 +145,31 @@ class JetMapState(
             }
         }
 
-        scope.launch(Dispatchers.Default) {
-            gestureController.tapState.collectLatest { tapState ->
-                if (tapState == null) {
-                    return@collectLatest
-                }
-
-                val markerState = markerController.markerState.value
-                val existingMarker = markerState.firstOrNull { marker ->
-                    val xOffset = marker.bitmap.width / 2
-                    val yOffset = marker.bitmap.height / 2
-
-                    marker.x.toFloat() in tapState.x - xOffset..tapState.x + xOffset
-                            && marker.y.toFloat() in tapState.y - yOffset..tapState.y + yOffset
-                }
-
-                pathfindingController.findPath(
-                    startingPoint = existingMarker?.let { marker ->
-                        IntOffset(marker.x, marker.y)
-                    } ?: IntOffset(
-                        x = tapState.x.toInt(),
-                        y = tapState.y.toInt()
-                    ),
-                    endingPoint = IntOffset(x = 601, y = 1244)
-                )
-            }
-        }
+//        scope.launch(Dispatchers.Default) {
+//            gestureController.tapState.collectLatest { tapState ->
+//                if (tapState == null) {
+//                    return@collectLatest
+//                }
+//
+//                val markerState = markerController.markerState.value
+//                val existingMarker = markerState.firstOrNull { marker ->
+//                    val xOffset = marker.bitmap.width / 2
+//                    val yOffset = marker.bitmap.height / 2
+//
+//                    marker.x.toFloat() in tapState.x - xOffset..tapState.x + xOffset
+//                            && marker.y.toFloat() in tapState.y - yOffset..tapState.y + yOffset
+//                }
+//
+//                pathfindingController.findPath(
+//                    startingPoint = existingMarker?.let { marker ->
+//                        IntOffset(marker.x, marker.y)
+//                    } ?: IntOffset(
+//                        x = tapState.x.toInt(),
+//                        y = tapState.y.toInt()
+//                    ),
+//                    endingPoint = IntOffset(x = 601, y = 1244)
+//                )
+//            }
+//        }
     }
 }

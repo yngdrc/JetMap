@@ -130,8 +130,8 @@ internal class MarkerController(
         markers.forEach { marker ->
             val paint = when {
                 focusedMarkerState != null -> {
-                    if (focusedMarkerState.first.x == marker.x.toFloat()
-                        && focusedMarkerState.first.y == marker.y.toFloat()
+                    if (focusedMarkerState.offset.x == marker.x.toFloat()
+                        && focusedMarkerState.offset.y == marker.y.toFloat()
                     ) {
                         Paint().apply {
                             isFilterBitmap = false

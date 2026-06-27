@@ -25,4 +25,10 @@ class MarkerRepositoryImpl @Inject constructor(
             floorId = floorId
         ).map { markerLocalEntity -> markerLocalEntity.toEntity() }
     }
+
+    override suspend fun search(query: String): List<MarkerEntity> {
+        return markerDao.search(
+            query = "%$query%"
+        ).map { markerLocalEntity -> markerLocalEntity.toEntity() }
+    }
 }

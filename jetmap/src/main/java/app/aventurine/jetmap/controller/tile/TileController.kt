@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class TileController(
+internal class TileController(
     parentScope: CoroutineScope,
     val tileProvider: TileProvider,
     val config: JetMapConfig

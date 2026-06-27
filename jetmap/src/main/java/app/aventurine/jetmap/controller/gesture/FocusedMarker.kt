@@ -1,5 +1,11 @@
 package app.aventurine.jetmap.controller.gesture
 
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.geometry.Offset
 
-typealias FocusedMarker = Triple<Offset, String, Boolean>
+data class FocusedMarker(
+    val offset: Offset,
+    val description: String,
+    val exists: Boolean,
+    @field:DrawableRes val iconId: Int?
+)

@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
-internal class GestureController : GestureApi {
+internal class GestureControllerImpl : GestureApi {
     private val _tapState: MutableStateFlow<Offset?> = MutableStateFlow(null)
     private val _focusedMarker: MutableState<FocusedMarker?> = mutableStateOf(null)
 
@@ -30,12 +30,13 @@ internal class GestureController : GestureApi {
         tapState: Offset,
         existingMarker: Marker?
     ) {
-        _focusedMarker.value = Triple(
-            existingMarker?.let { marker ->
+        _focusedMarker.value = FocusedMarker(
+            offset = existingMarker?.let { marker ->
                 Offset(marker.x.toFloat(), marker.y.toFloat())
             } ?: tapState,
-            existingMarker?.description ?: "${tapState.x.toInt()}, ${tapState.y.toInt()}",
-            existingMarker != null
+            description = existingMarker?.description ?: "${tapState.x.toInt()}, ${tapState.y.toInt()}",
+            exists = existingMarker != null,
+            iconId = existingMarker?.iconId
         )
     }
 

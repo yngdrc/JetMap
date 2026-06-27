@@ -9,13 +9,6 @@ data class Marker(
     val y: Int,
     val z: Int,
     val bitmap: Bitmap,
+    @field:DrawableRes val iconId: Int,
     val description: String
-) {
-//    fun calculateX(mapConfig: JetMapConfig): Double {
-//        return ((x.toDouble() - mapConfig.leftMostTileCoordinate) / mapConfig.mapWidth)
-//    }
-//
-//    fun calculatedY(mapConfig: JetMapConfig): Double {
-//        return ((y.toDouble() - mapConfig.topMostTileCoordinate) / mapConfig.mapHeight)
-//    }
-}
+)

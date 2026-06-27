@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Query
 import app.aventurine.jetmap.ui.JetMapConfig
 import app.aventurine.jetmapdemo.data.base.BaseDao
+import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerEntity
 import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerLocalEntity
 
 @Dao
@@ -34,4 +35,7 @@ interface MarkerDao : BaseDao<MarkerLocalEntity> {
         endY = coordinates.endY,
         floorId = floorId
     )
+
+    @Query("SELECT * FROM marker WHERE x LIKE :query OR y LIKE :query OR description LIKE :query")
+    suspend fun search(query: String): List<MarkerLocalEntity>
 }
