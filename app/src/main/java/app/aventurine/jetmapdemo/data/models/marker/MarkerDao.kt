@@ -1,5 +1,6 @@
 package app.aventurine.jetmapdemo.data.models.marker
 
+import androidx.compose.ui.geometry.Offset
 import androidx.room.Dao
 import androidx.room.Query
 import app.aventurine.jetmap.ui.JetMapConfig
@@ -10,8 +11,11 @@ import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerLocalEntity
 @Dao
 interface MarkerDao : BaseDao<MarkerLocalEntity> {
 
-    @Query("SELECT * FROM marker WHERE uid = :uid")
-    suspend fun get(uid: String): MarkerLocalEntity
+    @Query("SELECT * FROM marker WHERE uid = :uid LIMIT 1")
+    suspend fun get(uid: String): MarkerLocalEntity?
+
+    @Query("SELECT * FROM marker WHERE x BETWEEN :x - 5 AND :x + 5 AND y BETWEEN :y - 5 AND :y + 5 AND floorId = :z LIMIT 1")
+    suspend fun get(x: Int, y: Int, z: Int): MarkerLocalEntity?
 
     @Query("SELECT * FROM marker")
     suspend fun getAll(): List<MarkerLocalEntity>
@@ -36,6 +40,6 @@ interface MarkerDao : BaseDao<MarkerLocalEntity> {
         floorId = floorId
     )
 
-    @Query("SELECT * FROM marker WHERE x LIKE :query OR y LIKE :query OR description LIKE :query")
+    @Query("SELECT * FROM marker WHERE x LIKE :query OR y LIKE :query OR description LIKE :query LIMIT 20")
     suspend fun search(query: String): List<MarkerLocalEntity>
 }

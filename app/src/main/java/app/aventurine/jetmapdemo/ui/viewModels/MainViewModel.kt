@@ -7,18 +7,20 @@ import android.graphics.BitmapFactory
 import androidx.compose.ui.geometry.Rect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.util.query
-import app.aventurine.jetmap.models.Marker
+import app.aventurine.jetmap.controller.marker.models.Marker
 import app.aventurine.jetmap.provider.AssetTileProvider
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.ui.JetMapConfig
 import app.aventurine.jetmap.controller.JetMapController
+import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
 import app.aventurine.jetmapdemo.MarkerExtractor
+import app.aventurine.jetmapdemo.R
 import app.aventurine.jetmapdemo.data.models.marker.MarkerRepository
 import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,9 +30,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.InputStream
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val assetManager: AssetManager,
@@ -50,37 +54,27 @@ class MainViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    fun onQueryChange(
-        query: String
-    ) {
-        _queryStateFlow.update { query }
-    }
+    fun onQueryChange(query: String) = _queryStateFlow.update { query }
 
     val markerProvider = object : MarkerProvider {
-        override suspend fun getMarker(
-            x: Int,
-            y: Int,
-            z: Int
-        ): Marker {
-            val markerEntity = markerRepository.get(uid = "marker_${x}_${y}_$z")
-            return Marker(
-                x = markerEntity.x,
-                y = markerEntity.y,
-                z = markerEntity.floorId,
-                bitmap = BitmapFactory.decodeResource(
-                    resources,
-                    markerEntity.iconDrawableRes,
-                    BitmapFactory.Options().apply {
-                        inScaled = false
-                        inPreferredConfig = Bitmap.Config.ARGB_8888
-                    }
-                ),
-                description = markerEntity.description,
-                iconId = markerEntity.iconDrawableRes
+        override suspend fun getMarkerInputStream(
+            markerDescriptor: MarkerDescriptor
+        ): InputStream {
+            return resources.openRawResource(markerDescriptor.iconId)
+        }
+
+        override suspend fun getMarker(x: Int, y: Int, z: Int): MarkerDescriptor {
+            val markerEntity = markerRepository.get(x = x, y = y, z = z)
+            return MarkerDescriptor(
+                x = markerEntity?.x ?: x,
+                y = markerEntity?.y ?: y,
+                z = markerEntity?.floorId ?: z,
+                iconId = markerEntity?.iconDrawableRes ?: R.drawable.ic_map_player,
+                description = markerEntity?.description ?: "$x, $y"
             )
         }
 
-        override suspend fun getMarkers(visibleAreaRect: Rect, level: Int): List<Marker> {
+        override suspend fun getMarkers(visibleAreaRect: Rect, level: Int): List<MarkerDescriptor> {
             return markerRepository.getMarkersByCoordinates(
                 coordinates = JetMapConfig.Coordinates(
                     startX = visibleAreaRect.left.toInt(),
@@ -90,18 +84,10 @@ class MainViewModel @Inject constructor(
                 ),
                 floorId = level
             ).map { markerEntity ->
-                Marker(
+                MarkerDescriptor(
                     x = markerEntity.x,
                     y = markerEntity.y,
                     z = markerEntity.floorId,
-                    bitmap = BitmapFactory.decodeResource(
-                        resources,
-                        markerEntity.iconDrawableRes,
-                        BitmapFactory.Options().apply {
-                            inScaled = false
-                            inPreferredConfig = Bitmap.Config.ARGB_8888
-                        }
-                    ),
                     description = markerEntity.description,
                     iconId = markerEntity.iconDrawableRes
                 )

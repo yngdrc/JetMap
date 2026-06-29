@@ -9,6 +9,8 @@ import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerRemoteEntity
 abstract class MarkerRepository(
     dao: MarkerDao
 ) : EntityRepository<MarkerEntity, MarkerLocalEntity, MarkerRemoteEntity>(dao = dao) {
+    abstract suspend fun get(x: Int, y: Int, z: Int): MarkerEntity?
+
     abstract suspend fun getMarkersByCoordinates(
         coordinates: JetMapConfig.Coordinates,
         floorId: Int

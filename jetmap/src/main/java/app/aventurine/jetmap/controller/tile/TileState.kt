@@ -1,5 +1,5 @@
 package app.aventurine.jetmap.controller.tile
 
-import app.aventurine.jetmap.models.Tile
+import app.aventurine.jetmap.controller.tile.models.Tile
 
 typealias TileState = Collection<Tile>

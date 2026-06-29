@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
@@ -45,15 +44,17 @@ fun JetMap(
         jetMapController.initialize(canvasSize = canvasSize)
 
         val canvasPlaceables = subcompose(slotId = JetMapController::class.java.name) {
-            val motionState by jetMapController.motionController.motionState.collectAsStateWithLifecycle()
-            val tileState by jetMapController.tileController.tileState.collectAsStateWithLifecycle()
-            val markerState by jetMapController.markerController.markerState.collectAsStateWithLifecycle()
-            val pathState by jetMapController.pathfindingController.pathState.collectAsStateWithLifecycle(
+            val motionState by jetMapController.motionController.motionStateFlow.collectAsStateWithLifecycle()
+            val tileState by jetMapController.tileController.tileStateFlow.collectAsStateWithLifecycle()
+            val markerState by jetMapController.markerController.markerStateFlow.collectAsStateWithLifecycle()
+            val pathState by jetMapController.pathfindingController.pathStateFlow.collectAsStateWithLifecycle(
                 null
             )
 
-            val level by jetMapController.motionController.levelState.collectAsStateWithLifecycle()
-            val focusedMarkerState by jetMapController.gestureController.focusedMarker
+            val level by jetMapController.motionController.levelStateFlow.collectAsStateWithLifecycle()
+            val focusedMarker by jetMapController.gestureController.focusedMarkerFlow
+                .collectAsStateWithLifecycle()
+
             val pinBitmap = ImageBitmap.imageResource(id = myLocationResId).asAndroidBitmap()
 
             JetMapCanvas(
@@ -62,7 +63,8 @@ fun JetMap(
                         onTap = { offset ->
                             jetMapController.gestureController.onTap(
                                 offset = offset,
-                                motionState = motionState
+                                motionState = motionState,
+                                level = level
                             )
                         }
                     )
@@ -106,22 +108,11 @@ fun JetMap(
                 drawIntoCanvas { canvas ->
                     jetMapController.markerController.draw(
                         markers = markerState,
-                        motionState = motionState,
-                        focusedMarkerState = focusedMarkerState,
+                        focusedMarker = focusedMarker,
+                        level = level,
+                        pinBitmap = pinBitmap,
                         canvas = canvas,
                     )
-                }
-
-                focusedMarkerState?.let { marker ->
-                    if (marker.exists) return@let
-                    drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.drawBitmap(
-                            pinBitmap,
-                            marker.offset.x - pinBitmap.width,
-                            marker.offset.y - pinBitmap.height,
-                            null
-                        )
-                    }
                 }
             }
         }.map { measurable ->

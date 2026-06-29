@@ -4,10 +4,8 @@ import android.content.res.AssetManager
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import app.aventurine.jetmap.descriptor.MarkerDescriptor
 import app.aventurine.jetmap.ui.JetMapConfig
 import app.aventurine.jetmapdemo.data.models.marker.MarkerRepository
-import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerEntity
 import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerLocalEntity
 import kotlinx.coroutines.Dispatchers
 

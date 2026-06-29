@@ -1,6 +1,7 @@
 package app.aventurine.jetmap.controller.marker
 
-import android.graphics.ColorFilter
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
@@ -9,22 +10,24 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.graphics.setBlendMode
-import app.aventurine.jetmap.controller.gesture.FocusedMarker
 import app.aventurine.jetmap.controller.motion.MotionState
-import app.aventurine.jetmap.descriptor.MarkerDescriptor
-import app.aventurine.jetmap.models.Marker
+import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
+import app.aventurine.jetmap.controller.marker.models.Marker
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmap.utils.shouldRecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,29 +38,37 @@ internal class MarkerController(
     val config: JetMapConfig
 ) : MarkerApi {
     private val scope: CoroutineScope = CoroutineScope(
-        parentScope.coroutineContext + SupervisorJob()
+        context = parentScope.coroutineContext + SupervisorJob()
     )
 
-    private val _renderMarkersFlow: MutableSharedFlow<MarkerDescriptor> = MutableSharedFlow()
+    private val _markerStateFlow: MutableStateFlow<MarkerState> =
+        MutableStateFlow(value = emptyList())
+    override val markerStateFlow: StateFlow<MarkerState> = _markerStateFlow.asStateFlow()
 
-    private val _markerState: MutableStateFlow<MarkerState> = MutableStateFlow(emptyList())
-    override val markerState: StateFlow<MarkerState> = _markerState.asStateFlow()
+    private val _renderMarkersFlow: MutableSharedFlow<List<MarkerDescriptor>> =
+        MutableSharedFlow()
+
+    internal val renderMarkersFlow: SharedFlow<List<MarkerDescriptor>> = _renderMarkersFlow.shareIn(
+        scope = scope,
+        started = SharingStarted.WhileSubscribed(),
+        replay = 0
+    )
 
     init {
         scope.launch {
-            _renderMarkersFlow.mapNotNull(::getMarker)
-                .collect { marker ->
-                    _markerState.update { markerState ->
-                        val existingMarker = markerState.find {
-                            it.x == marker.x && it.y == marker.y && it.z == marker.z
-                        }
-
-                        if (existingMarker != null)
-                            return@update markerState
-
-                        markerState.plus(marker)
+            renderMarkersFlow.map { markerDescriptors ->
+                markerDescriptors.filter { markerDescriptor ->
+                    _markerStateFlow.value.none { existingMarker ->
+                        existingMarker.id == markerDescriptor.id
                     }
+                }.mapNotNull { markerDescriptor ->
+                    getMarker(markerDescriptor = markerDescriptor)
                 }
+            }.collect { markers ->
+                _markerStateFlow.update { markerState ->
+                    markerState.plus(markers)
+                }
+            }
         }
     }
 
@@ -73,14 +84,12 @@ internal class MarkerController(
         visibleAreaRect: Rect,
         level: Int
     ) {
-        val markersToRecycle = _markerState.value.filter { marker ->
-            marker.x.toFloat() !in (visibleAreaRect.left..visibleAreaRect.right)
-                    || marker.y.toFloat() !in (visibleAreaRect.top..visibleAreaRect.bottom)
-                    || marker.z != level
+        val markersToRecycle = _markerStateFlow.value.filter { marker ->
+            marker.shouldRecycle(visibleAreaRect = visibleAreaRect, level = level)
         }.toSet()
 
-        _markerState.update { markers ->
-            markers.minus(markersToRecycle)
+        _markerStateFlow.update { markerState ->
+            markerState.minus(elements = markersToRecycle)
         }
 
         markersToRecycle.forEach { marker -> marker.bitmap.recycle() }
@@ -90,62 +99,66 @@ internal class MarkerController(
         visibleAreaRect: Rect,
         level: Int
     ) {
-        val markers = markerProvider.getMarkers(visibleAreaRect = visibleAreaRect, level = level)
-        markers.forEach { marker ->
-            _markerState.update { markerState ->
-                val existingMarker = markerState.find {
-                    it.x == marker.x && it.y == marker.y && it.z == marker.z
-                }
-
-                if (existingMarker != null)
-                    return@update markerState
-
-                markerState.plus(marker)
-            }
+        val markers = withContext(Dispatchers.IO) {
+            markerProvider.getMarkers(
+                visibleAreaRect = visibleAreaRect,
+                level = level,
+            )
         }
+
+        _renderMarkersFlow.emit(value = markers)
     }
 
     private suspend fun getMarker(
         markerDescriptor: MarkerDescriptor
-    ): Marker? = withContext(Dispatchers.IO) {
-        try {
-            markerProvider.getMarker(
-                x = markerDescriptor.x,
-                y = markerDescriptor.y,
-                z = markerDescriptor.z
-            )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            return@withContext null
-        }
+    ): Marker? {
+        val markerBitmap = withContext(Dispatchers.IO) {
+            try {
+                markerProvider.getMarkerInputStream(
+                    markerDescriptor = markerDescriptor
+                )?.use(BitmapFactory::decodeStream)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+        } ?: return null
+
+        return Marker(
+            x = markerDescriptor.x,
+            y = markerDescriptor.y,
+            z = markerDescriptor.z,
+            bitmap = markerBitmap,
+            description = markerDescriptor.description
+        )
     }
 
     internal fun draw(
         markers: Collection<Marker>,
-        motionState: MotionState,
-        focusedMarkerState: FocusedMarker?,
+        focusedMarker: MarkerDescriptor?,
+        level: Int,
+        pinBitmap: Bitmap,
         canvas: Canvas
     ) {
-        markers.forEach { marker ->
-            val paint = when {
-                focusedMarkerState != null -> {
-                    if (focusedMarkerState.offset.x == marker.x.toFloat()
-                        && focusedMarkerState.offset.y == marker.y.toFloat()
-                    ) {
-                        Paint().apply {
-                            isFilterBitmap = false
-                            colorFilter = PorterDuffColorFilter(
-                                Color.White.copy(alpha = 0.2f).toArgb(),
-                                PorterDuff.Mode.SRC_ATOP
-                            )
-                        }
-                    } else {
-                        null
-                    }
-                }
+        if (focusedMarker != null && markers.none { marker -> marker.id == focusedMarker.id } && focusedMarker.z == level) {
+            canvas.nativeCanvas.drawBitmap(
+                pinBitmap,
+                focusedMarker.x.toFloat() - pinBitmap.width,
+                focusedMarker.y.toFloat() - pinBitmap.height,
+                null
+            )
+        }
 
-                else -> null
+        markers.forEach { marker ->
+            var paint: Paint? = null
+            if (focusedMarker?.id == marker.id) {
+                paint = Paint().apply {
+                    isFilterBitmap = false
+                    colorFilter = PorterDuffColorFilter(
+                        Color.White.copy(alpha = 0.2f).toArgb(),
+                        PorterDuff.Mode.SRC_ATOP
+                    )
+                }
             }
 
             canvas.nativeCanvas.drawBitmap(

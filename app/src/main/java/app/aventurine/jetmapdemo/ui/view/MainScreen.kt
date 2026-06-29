@@ -6,27 +6,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.BottomSheetScaffoldState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SearchBar
-import androidx.compose.material3.SearchBarDefaults
-import androidx.compose.material3.SearchBarState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberBottomSheetScaffoldState
-import androidx.compose.material3.rememberSearchBarState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.IntSize
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.aventurine.jetmap.controller.gesture.FocusedMarker
 import app.aventurine.jetmap.ui.JetMap
 import app.aventurine.jetmap.controller.JetMapController
+import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
+import app.aventurine.jetmap.utils.gestureApi
+import app.aventurine.jetmap.utils.motionApi
 import app.aventurine.jetmapdemo.R
 import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerEntity
 import app.aventurine.jetmapdemo.ui.viewModels.MainViewModel
@@ -36,7 +31,9 @@ import app.aventurine.jetmapdemo.ui.viewModels.MainViewModel
 fun MainScreen(
     mainViewModel: MainViewModel = hiltViewModel()
 ) {
-    val focusedMarker by mainViewModel.jetMapController.gestureApi.focusedMarker
+    val focusedMarker by mainViewModel.jetMapController.gestureApi.focusedMarkerFlow
+        .collectAsStateWithLifecycle()
+
     val query by mainViewModel.queryStateFlow.collectAsStateWithLifecycle()
     val searchResults by mainViewModel.searchResultsFlow.collectAsStateWithLifecycle()
     val scaffoldState = rememberBottomSheetScaffoldState(
@@ -59,7 +56,7 @@ fun MainScreen(
         query = query,
         searchResults = searchResults,
         onCloseBottomSheet = {
-            mainViewModel.jetMapController.gestureApi.clear()
+            mainViewModel.jetMapController.gestureApi.changeFocusedMarker(focusedMarker = null)
             mainViewModel.jetMapController.pathfindingController.clear()
         },
         onQueryChange = mainViewModel::onQueryChange,
@@ -70,7 +67,7 @@ fun MainScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenContent(
-    focusedMarker: FocusedMarker?,
+    focusedMarker: MarkerDescriptor?,
     scaffoldState: BottomSheetScaffoldState,
     jetMapController: JetMapController,
     query: String,
@@ -112,7 +109,7 @@ fun MainScreenContent(
                 return@Box
             }
 
-            val level by jetMapController.motionApi.levelState.collectAsStateWithLifecycle()
+            val level by jetMapController.motionApi.levelStateFlow.collectAsStateWithLifecycle()
             MapOverlay(
                 modifier = Modifier.padding(innerPadding),
                 query = query,
@@ -122,15 +119,15 @@ fun MainScreenContent(
                 onQueryChange = onQueryChange,
                 onSearch = onSearch,
                 onSearchResultTap = { markerEntity ->
-                    jetMapController.motionApi.changeLevel(level = markerEntity.floorId)
-                    jetMapController.motionApi.moveTo(
-                        offset = Offset(
-                            markerEntity.x.toFloat(),
-                            markerEntity.y.toFloat()
-                        ),
-                        zoom = 5f
+                    jetMapController.gestureApi.changeFocusedMarker(
+                        focusedMarker = MarkerDescriptor(
+                            x = markerEntity.x,
+                            y = markerEntity.y,
+                            z = markerEntity.floorId,
+                            iconId = markerEntity.iconDrawableRes,
+                            description = markerEntity.description
+                        )
                     )
-                    jetMapController.gestureApi
                 }
             )
         }

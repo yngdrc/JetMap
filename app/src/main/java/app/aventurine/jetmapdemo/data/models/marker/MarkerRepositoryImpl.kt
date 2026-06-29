@@ -8,8 +8,12 @@ import javax.inject.Inject
 class MarkerRepositoryImpl @Inject constructor(
     private val markerDao: MarkerDao,
 ) : MarkerRepository(dao = markerDao) {
-    override suspend fun get(uid: String): MarkerEntity {
-        return markerDao.get(uid = uid).toEntity()
+    override suspend fun get(uid: String): MarkerEntity? {
+        return markerDao.get(uid = uid)?.toEntity()
+    }
+
+    override suspend fun get(x: Int, y: Int, z: Int): MarkerEntity? {
+        return markerDao.get(x = x, y = y, z = z)?.toEntity()
     }
 
     override suspend fun getAll(): Collection<MarkerEntity> {

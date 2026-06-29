@@ -1,22 +1,15 @@
 package app.aventurine.jetmap.controller.pathfinding
 
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.IntOffset
-import app.aventurine.jetmap.provider.TileProvider
-import app.aventurine.jetmap.ui.JetMapConfig
 import app.aventurine.jetmap.utils.MinimapStitcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -29,17 +22,17 @@ class PathfindingController(
         parentScope.coroutineContext + SupervisorJob()
     )
 
-    private val _pathState: MutableStateFlow<PathState?> = MutableStateFlow(null)
-    val pathState: SharedFlow<PathState?> = _pathState.asSharedFlow()
+    private val _pathStateFlow: MutableStateFlow<PathState?> = MutableStateFlow(value = null)
+    val pathStateFlow: SharedFlow<PathState?> = _pathStateFlow.asSharedFlow()
 
     private var job: Job? = null
 
     fun findPath(
-        startingPoint: IntOffset,
-        endingPoint: IntOffset
+        startingPoint: Pair<IntOffset, Int>,
+        endingPoint: Pair<IntOffset, Int>
     ) {
         job?.cancel()
-        _pathState.update { null }
+        _pathStateFlow.update { null }
 
         job = scope.launch(Dispatchers.Default) {
             val mapBitmap = withContext(Dispatchers.IO) {
@@ -51,17 +44,16 @@ class PathfindingController(
             }
 
             val pathData = pathFinder.aStar(
-                start = Node(offset = startingPoint, g = 0, h = 0, parent = null),
-                end = endingPoint,
+                start = Node(offset = startingPoint.first, g = 0, h = 0, parent = null),
+                end = endingPoint.first,
                 mapBitmap = mapBitmap
             )
 
-
             mapBitmap.recycle()
-            _pathState.update {
+            _pathStateFlow.update {
                 PathState(
-                    startingPoint = startingPoint,
-                    endingPoint = endingPoint,
+                    startingPoint = startingPoint.first,
+                    endingPoint = endingPoint.first,
                     pathData = pathData
                 )
             }
@@ -69,6 +61,6 @@ class PathfindingController(
     }
 
     fun clear() {
-        _pathState.update { null }
+        _pathStateFlow.update { null }
     }
 }

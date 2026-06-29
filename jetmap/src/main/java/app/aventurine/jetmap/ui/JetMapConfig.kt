@@ -38,10 +38,10 @@ data class JetMapConfig(
         }
 
         return Coordinates(
-            startX = calculateX(x = visibleArea.first.first),
-            startY = calculateY(y = visibleArea.second.first),
-            endX = calculateX(x = visibleArea.first.last),
-            endY = calculateY(y = visibleArea.second.last)
+            startX = calculateX(x = visibleArea.left),
+            startY = calculateY(y = visibleArea.top),
+            endX = calculateX(x = visibleArea.right),
+            endY = calculateY(y = visibleArea.bottom)
         )
     }
 
