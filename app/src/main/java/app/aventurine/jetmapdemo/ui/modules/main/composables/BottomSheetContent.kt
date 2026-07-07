@@ -26,6 +26,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
 import app.aventurine.jetmapdemo.R
+import app.aventurine.jetmapdemo.utils.getIconDrawableRes
 
 @Composable
 fun BottomSheetContent(
@@ -47,12 +48,22 @@ fun BottomSheetContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             key(focusedMarker.iconId) {
-                Image(
-                    modifier = Modifier.size(24.dp),
-                    bitmap = ImageBitmap.imageResource(focusedMarker.iconId),
-                    contentDescription = "Marker Icon",
-                    filterQuality = FilterQuality.None
-                )
+                val iconRes = try {
+                    getIconDrawableRes(iconId = focusedMarker.iconId)
+                } catch (e: Exception) {
+                    null
+                }
+
+                if (iconRes != null) {
+                    Image(
+                        modifier = Modifier.size(24.dp),
+                        bitmap = ImageBitmap.imageResource(
+                            id = iconRes
+                        ),
+                        contentDescription = "Marker Icon",
+                        filterQuality = FilterQuality.None
+                    )
+                }
             }
 
             Text(text = focusedMarker.description)

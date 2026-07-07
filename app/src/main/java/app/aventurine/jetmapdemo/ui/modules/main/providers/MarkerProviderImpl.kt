@@ -15,8 +15,12 @@ class MarkerProviderImpl(
 ) : MarkerProvider {
     override suspend fun getMarkerInputStream(
         markerDescriptor: MarkerDescriptor
-    ): InputStream {
-        return resources.openRawResource(getIconDrawableRes(iconId = markerDescriptor.iconId))
+    ): InputStream? {
+        return try {
+            resources.openRawResource(getIconDrawableRes(iconId = markerDescriptor.iconId))
+        } catch (e: Exception) {
+            null
+        }
     }
 
     override suspend fun getMarker(x: Int, y: Int, z: Int): MarkerDescriptor {
