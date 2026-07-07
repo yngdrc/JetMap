@@ -2,6 +2,7 @@ package app.aventurine.jetmap.controller.pathfinding
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -10,6 +11,7 @@ import java.util.PriorityQueue
 import kotlin.math.absoluteValue
 import kotlin.math.min
 import androidx.core.graphics.get
+import app.aventurine.jetmap.utils.MinimapStitcher
 
 data class Node(
     val offset: IntOffset,
@@ -38,6 +40,7 @@ class AStarPathFinder {
             val current = open.poll()!!
 
             if (current.offset == end) {
+                mapBitmap.recycle()
                 return@withContext generateSequence(current) { it.parent }
                     .map { it.offset }
                     .toList()
@@ -58,6 +61,7 @@ class AStarPathFinder {
             }
         }
 
+        mapBitmap.recycle()
         emptyList()
     }
 
@@ -85,7 +89,12 @@ class AStarPathFinder {
                 return@mapNotNull null
             }
 
-            Node(offset = offset, g = node.g + 10, h = heuristic(offset, end), parent = node)
+            Node(
+                offset = offset,
+                g = node.g + 10,
+                h = heuristic(offset, end),
+                parent = node
+            )
         }
 
         val diagonal = listOf(
@@ -108,7 +117,12 @@ class AStarPathFinder {
                 return@mapNotNull null
             }
 
-            Node(offset = offset, g = node.g + 14, h = heuristic(offset, end), parent = node)
+            Node(
+                offset = offset,
+                g = node.g + 14,
+                h = heuristic(offset, end),
+                parent = node
+            )
         }
 
         return straight + diagonal

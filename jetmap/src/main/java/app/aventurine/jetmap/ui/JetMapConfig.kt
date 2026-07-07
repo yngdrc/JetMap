@@ -28,23 +28,6 @@ data class JetMapConfig(
     val xTileCount: Int = mapSize.width / tileSize
     val yTileCount: Int = mapSize.height / tileSize
 
-    fun getCoordinates(visibleArea: VisibleArea): Coordinates {
-        fun calculateX(x: Int): Int {
-            return (x * tileSize)
-        }
-
-        fun calculateY(y: Int): Int {
-            return (y * tileSize)
-        }
-
-        return Coordinates(
-            startX = calculateX(x = visibleArea.left),
-            startY = calculateY(y = visibleArea.top),
-            endX = calculateX(x = visibleArea.right),
-            endY = calculateY(y = visibleArea.bottom)
-        )
-    }
-
     data class Coordinates(
         val startX: Int,
         val startY: Int,
@@ -53,6 +36,7 @@ data class JetMapConfig(
     )
 
     companion object {
+        val LEVELS = IntRange(0, 15)
         const val BASE_FLOOR_ID: Int = 7
     }
 }

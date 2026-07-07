@@ -1,0 +1,21 @@
+package app.aventurine.jetmapdemo.data.repositories.marker
+
+import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmapdemo.data.room.dao.MarkerDao
+import app.aventurine.jetmapdemo.data.repositories.EntityRepository
+import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerEntity
+import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerLocalEntity
+import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerRemoteEntity
+
+abstract class MarkerRepository(
+    dao: MarkerDao
+) : EntityRepository<MarkerEntity, MarkerLocalEntity, MarkerRemoteEntity>(dao = dao) {
+    abstract suspend fun get(x: Int, y: Int, z: Int): MarkerEntity?
+
+    abstract suspend fun getMarkersByCoordinates(
+        coordinates: JetMapConfig.Coordinates,
+        floorId: Int
+    ): Collection<MarkerEntity>
+
+    abstract suspend fun search(query: String): List<MarkerEntity>
+}

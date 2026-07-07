@@ -1,17 +1,15 @@
 package app.aventurine.jetmapdemo.data.models.marker.entities
 
 import androidx.annotation.DrawableRes
-import app.aventurine.jetmap.ui.JetMapConfig
 import app.aventurine.jetmapdemo.R
-import app.aventurine.jetmapdemo.data.base.Entity
+import app.aventurine.jetmapdemo.data.models.Entity
 
 data class MarkerEntity(
     val x: Int,
     val y: Int,
     val floorId: Int,
     val iconId: Int,
-    val description: String,
-    val uid: String
+    val description: String
 ) : Entity() {
 
     @get:DrawableRes

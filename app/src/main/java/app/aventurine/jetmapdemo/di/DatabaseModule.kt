@@ -2,8 +2,9 @@ package app.aventurine.jetmapdemo.di
 
 import android.content.Context
 import androidx.room.Room
-import app.aventurine.jetmapdemo.data.base.JetMapDatabase
-import app.aventurine.jetmapdemo.data.models.marker.MarkerDao
+import app.aventurine.jetmapdemo.data.room.JetMapDatabase
+import app.aventurine.jetmapdemo.data.room.dao.LadderDao
+import app.aventurine.jetmapdemo.data.room.dao.MarkerDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,14 +18,14 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideTibiaBuddyDatabase(
+    fun provideJetMapDatabase(
         @ApplicationContext context: Context
     ): JetMapDatabase {
         return Room.databaseBuilder(
             context = context,
             klass = JetMapDatabase::class.java,
             name = JetMapDatabase.DATABASE_NAME
-        ).fallbackToDestructiveMigration()
+        ).fallbackToDestructiveMigration(false)
             .build()
     }
 
@@ -33,5 +34,12 @@ object DatabaseModule {
         jetMapDatabase: JetMapDatabase
     ): MarkerDao {
         return jetMapDatabase.markerDao()
+    }
+
+    @Provides
+    fun provideLadderDao(
+        jetMapDatabase: JetMapDatabase
+    ): LadderDao {
+        return jetMapDatabase.ladderDao()
     }
 }

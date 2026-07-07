@@ -14,7 +14,7 @@ class AssetTileProvider(
     ): InputStream {
         val fileNamePrefix = when (tileDescriptor.terrainType) {
             TerrainType.NORMAL -> "minimap/Minimap_Color_"
-            TerrainType.PATHFINDING -> "minimap_pathfinding/Minimap_WaypointCost_"
+            TerrainType.WAYPOINT_COST -> "minimap_pathfinding/Minimap_WaypointCost_"
         }
 
         return assetManager.open(

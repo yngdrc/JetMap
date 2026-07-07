@@ -100,20 +100,20 @@ class JetMapController(
             }
         }
 
-//        scope.launch {
-//            combine(
-//                flow = motionController.motionStateFlow.debounce(timeout = 300.milliseconds),
-//                flow2 = motionController.levelStateFlow
-//            ) { motionState, level ->
-//                motionState to level
-//            }.buffer(capacity = 0)
-//                .collectLatest { (motionState, level) ->
-//                    markerController.onVisibleAreaChanged(
-//                        visibleAreaRect = motionState.getVisibleAreaRect(canvasSize = canvasSize),
-//                        level = level
-//                    )
-//                }
-//        }
+        scope.launch {
+            combine(
+                flow = motionController.motionStateFlow.debounce(timeout = 300.milliseconds),
+                flow2 = motionController.levelStateFlow
+            ) { motionState, level ->
+                motionState to level
+            }.buffer(capacity = 0)
+                .collectLatest { (motionState, level) ->
+                    markerController.onVisibleAreaChanged(
+                        visibleAreaRect = motionState.getVisibleAreaRect(canvasSize = canvasSize),
+                        level = level
+                    )
+                }
+        }
 
         scope.launch {
             gestureController.tapFlow
@@ -126,33 +126,36 @@ class JetMapController(
                 }
         }
 
-//        scope.launch {
-//            gestureController.focusedMarkerFlow
-//                .filterNotNull()
-//                .collectLatest { markerDescriptor ->
-//                    motionController.moveTo(
-//                        offset = Offset(
-//                            x = markerDescriptor.x.toFloat(),
-//                            y = markerDescriptor.y.toFloat()
-//                        ),
-//                        level = markerDescriptor.z,
-//                        zoom = 5f
-//                    )
-//                }
-//        }
-
         scope.launch {
             gestureController.focusedMarkerFlow
+                .filterNotNull()
                 .collectLatest { markerDescriptor ->
-                    if (markerDescriptor == null) {
-                        return@collectLatest pathfindingController.clear()
-                    }
-
-                    pathfindingController.findPath(
-                        startingPoint = IntOffset(x = markerDescriptor.x, y = markerDescriptor.y),
-                        endingPoint = IntOffset(x = 592, y = 1095)
+                    motionController.moveTo(
+                        offset = Offset(
+                            x = markerDescriptor.x.toFloat(),
+                            y = markerDescriptor.y.toFloat()
+                        ),
+                        level = markerDescriptor.z,
+                        zoom = 5f
                     )
                 }
         }
+
+//        scope.launch {
+//            gestureController.focusedMarkerFlow
+//                .collectLatest { markerDescriptor ->
+//                    if (markerDescriptor == null) {
+//                        return@collectLatest pathfindingController.clear()
+//                    }
+//
+//                    pathfindingController.findPath(
+//                        startingPoint = IntOffset(
+//                            x = markerDescriptor.x,
+//                            y = markerDescriptor.y
+//                        ) to markerDescriptor.z,
+//                        endingPoint = IntOffset(x = 612, y = 1198) to 8
+//                    )
+//                }
+//        }
     }
 }

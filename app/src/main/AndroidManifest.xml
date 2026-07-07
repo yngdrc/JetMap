@@ -6,7 +6,7 @@
 
     <application
         android:name=".JetMapApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -15,10 +15,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.JetMap"
         tools:targetApi="31">
+        <!--        TODO remove-->
         <activity
-            android:name=".ui.activities.MainActivity"
+            android:name=".ui.modules.sync.SyncActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.JetMap">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -26,6 +26,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.modules.main.MainActivity"
+            android:theme="@style/Theme.JetMap" />
     </application>
 
 </manifest>

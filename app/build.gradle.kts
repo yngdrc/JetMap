@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.ksp)
     id("kotlin-parcelize")
     alias(libs.plugins.hilt.android.gradle.plugin)
+    alias(libs.plugins.serialization)
 }
 
 android {
@@ -65,4 +66,18 @@ dependencies {
     implementation(libs.room.runtime)
     ksp(libs.room.compiler)
     implementation(libs.room.ktx)
+
+    // Retrofit
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+
+    // DataStore
+    implementation(libs.androidx.datastore)
+    implementation(libs.androidx.datastore.preferences)
+
+    // Serialization
+    implementation(libs.serialization.json)
+
+    // OkHttp
+    implementation(libs.okhttp.logging.interceptor)
 }
