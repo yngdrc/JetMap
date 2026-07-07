@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.AssetManager
 import android.content.res.Resources
 import app.aventurine.jetmapdemo.data.dataStore.DataStoreManager
+import app.aventurine.jetmapdemo.data.dataStore.DataStoreManagerImpl
 import app.aventurine.jetmapdemo.data.fileStorage.FileStorage
 import app.aventurine.jetmapdemo.data.fileStorage.FileStorageImpl
 import app.aventurine.jetmapdemo.data.network.JetMapApiService
@@ -33,7 +34,7 @@ class AppModule {
     @Singleton
     @Provides
     fun provideDataStoreManager(@ApplicationContext context: Context): DataStoreManager {
-        return DataStoreManager(context = context)
+        return DataStoreManagerImpl(context = context)
     }
 
     @Singleton
