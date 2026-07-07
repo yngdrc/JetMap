@@ -26,7 +26,6 @@ import app.aventurine.jetmap.utils.motionApi
 import app.aventurine.jetmapdemo.R
 import app.aventurine.jetmapdemo.ui.modules.main.composables.BottomSheetContent
 import app.aventurine.jetmapdemo.ui.modules.main.composables.MapOverlay
-import app.aventurine.jetmapdemo.utils.iconDrawableRes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,7 +125,7 @@ fun MainScreenContent(
                             x = markerEntity.x,
                             y = markerEntity.y,
                             z = markerEntity.floor,
-                            iconId = markerEntity.iconDrawableRes,
+                            iconId = markerEntity.iconId,
                             description = markerEntity.description
                         )
                     )

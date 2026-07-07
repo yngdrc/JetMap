@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
 import app.aventurine.jetmap.domain.models.MarkerEntity
 import app.aventurine.jetmapdemo.R
-import app.aventurine.jetmapdemo.utils.iconDrawableRes
+import app.aventurine.jetmapdemo.utils.getIconDrawableRes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,7 +106,9 @@ fun MapOverlay(
                             ) {
                                 Icon(
                                     modifier = Modifier.size(24.dp),
-                                    painter = painterResource(searchResult.iconDrawableRes),
+                                    painter = painterResource(
+                                        id = getIconDrawableRes(iconId = searchResult.iconId)
+                                    ),
                                     contentDescription = "Marker",
                                     tint = null
                                 )

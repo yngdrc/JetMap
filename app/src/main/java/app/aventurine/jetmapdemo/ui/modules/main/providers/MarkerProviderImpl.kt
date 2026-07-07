@@ -1,4 +1,4 @@
-package app.aventurine.jetmap.data.providers
+package app.aventurine.jetmapdemo.ui.modules.main.providers
 
 import android.content.res.Resources
 import androidx.compose.ui.geometry.Rect
@@ -6,6 +6,7 @@ import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
 import app.aventurine.jetmap.domain.repositories.MarkerRepository
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmapdemo.utils.getIconDrawableRes
 import java.io.InputStream
 
 class MarkerProviderImpl(
@@ -15,7 +16,7 @@ class MarkerProviderImpl(
     override suspend fun getMarkerInputStream(
         markerDescriptor: MarkerDescriptor
     ): InputStream {
-        return resources.openRawResource(markerDescriptor.iconId)
+        return resources.openRawResource(getIconDrawableRes(iconId = markerDescriptor.iconId))
     }
 
     override suspend fun getMarker(x: Int, y: Int, z: Int): MarkerDescriptor {

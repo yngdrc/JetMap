@@ -6,8 +6,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import app.aventurine.jetmap.controller.JetMapController
-import app.aventurine.jetmap.data.providers.MarkerProviderImpl
-import app.aventurine.jetmap.data.providers.TileProviderImpl
+import app.aventurine.jetmapdemo.ui.modules.main.providers.MarkerProviderImpl
+import app.aventurine.jetmapdemo.ui.modules.main.providers.TileProviderImpl
 import app.aventurine.jetmap.domain.fileStorage.FileStorage
 import app.aventurine.jetmap.domain.models.MapConfigEntity
 import app.aventurine.jetmap.domain.models.MarkerEntity

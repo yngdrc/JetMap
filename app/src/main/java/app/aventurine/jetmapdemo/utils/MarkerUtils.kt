@@ -1,12 +1,9 @@
 package app.aventurine.jetmapdemo.utils
 
-import androidx.annotation.DrawableRes
-import app.aventurine.jetmap.domain.models.MarkerEntity
 import app.aventurine.jetmapdemo.R
 
-@get:DrawableRes
-val MarkerEntity.iconDrawableRes: Int
-    get() = when (iconId) {
+fun getIconDrawableRes(iconId: Int): Int {
+    return when (iconId) {
         0x00 -> R.drawable.marker_checkmark
         0x01 -> R.drawable.marker_questionmark
         0x02 -> R.drawable.marker_exclamationmark
@@ -29,3 +26,4 @@ val MarkerEntity.iconDrawableRes: Int
         0x13 -> R.drawable.marker_green_down
         else -> throw IllegalArgumentException()
     }
+}

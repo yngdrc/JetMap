@@ -1,4 +1,4 @@
-package app.aventurine.jetmap.data.providers
+package app.aventurine.jetmapdemo.ui.modules.main.providers
 
 import app.aventurine.jetmap.controller.tile.models.TileDescriptor
 import app.aventurine.jetmap.domain.fileStorage.FileStorage
