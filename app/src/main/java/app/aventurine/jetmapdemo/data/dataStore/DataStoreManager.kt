@@ -6,6 +6,7 @@ import androidx.datastore.dataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
+import app.aventurine.jetmapdemo.data.models.config.entities.MapConfigEntity
 import app.aventurine.jetmapdemo.data.models.config.serializer.MapConfigJsonSerializer
 import app.aventurine.jetmapdemo.data.models.config.entities.MapConfigLocalEntity
 import kotlinx.coroutines.flow.Flow
@@ -32,12 +33,28 @@ class DataStoreManager(private val context: Context) {
         return preferencesFlow.firstOrNull()?.get(key = key)
     }
 
-    suspend fun get(defaultValue: MapConfigLocalEntity): MapConfigLocalEntity {
+    suspend fun get(defaultValue: MapConfigEntity): MapConfigEntity {
         return getOrNull() ?: defaultValue
     }
 
-    suspend fun getOrNull(): MapConfigLocalEntity? {
-        return mapConfigFlow.firstOrNull()
+    suspend fun getOrNull(): MapConfigEntity? {
+        val mapConfigLocalEntity = mapConfigFlow.firstOrNull() ?: return null
+        if (mapConfigLocalEntity !is MapConfigLocalEntity.Default) {
+            return null
+        }
+
+        return MapConfigEntity(
+            lowestFloor = mapConfigLocalEntity.lowestFloor,
+            baseFloor = mapConfigLocalEntity.baseFloor,
+            highestFloor = mapConfigLocalEntity.highestFloor,
+            tileSize = mapConfigLocalEntity.tileSize,
+            minX = mapConfigLocalEntity.minX,
+            minY = mapConfigLocalEntity.minY,
+            maxX = mapConfigLocalEntity.maxX,
+            maxY = mapConfigLocalEntity.maxY,
+            width = mapConfigLocalEntity.width,
+            height = mapConfigLocalEntity.height
+        )
     }
 
     suspend fun <T> update(key: Preferences.Key<T>, value: T?) {

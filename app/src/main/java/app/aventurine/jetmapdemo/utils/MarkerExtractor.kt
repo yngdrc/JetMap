@@ -1,29 +1,19 @@
 package app.aventurine.jetmapdemo.utils
 
 import android.content.res.AssetManager
-import android.content.res.Resources
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import app.aventurine.jetmap.ui.JetMapConfig
-import app.aventurine.jetmapdemo.R
 import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerLocalEntity
 import app.aventurine.jetmapdemo.data.repositories.marker.MarkerRepository
 import kotlinx.coroutines.Dispatchers
 
 class MarkerExtractor(
     private val assetManager: AssetManager,
-    private val resources: Resources,
     private val markerRepository: MarkerRepository,
     private val jetMapConfig: JetMapConfig
 ) {
     private companion object {
         const val MARKERS_PATH = "minimap/minimapmarkers.bin"
         const val SEPARATOR: Byte = 0x0A
-        const val X_START_BYTE: Byte = 0x08
-        const val Y_START_BYTE: Byte = 0x10
-        const val Z_START_BYTE: Byte = 0x18
-        const val ICON_START_BYTE: Byte = 0x10
-        const val STRING_START_BYTE: Byte = 0x1A
         val MARKER_END_BYTES = byteArrayOf(0x20, 0x00)
     }
 
@@ -189,37 +179,6 @@ class MarkerExtractor(
             floorId = dataMap[MarkerProperty.Z] as? Int ?: return null,
             iconId = dataMap[MarkerProperty.ICON] as? Int ?: return null,
             description = dataMap[MarkerProperty.STRING] as? String ?: ""
-        )
-    }
-
-    private fun getBitmapForIcon(icon: Int): Bitmap? {
-        val drawableRes = when (icon) {
-            0x00 -> R.drawable.marker_checkmark
-            0x01 -> R.drawable.marker_questionmark
-            0x02 -> R.drawable.marker_exclamationmark
-            0x03 -> R.drawable.marker_star
-            0x04 -> R.drawable.marker_crossmark
-            0x05 -> R.drawable.marker_cross
-            0x06 -> R.drawable.marker_lips
-            0x07 -> R.drawable.marker_spear
-            0x08 -> R.drawable.marker_sword
-            0x09 -> R.drawable.marker_flag
-            0x0A -> R.drawable.marker_lock
-            0x0B -> R.drawable.marker_bag
-            0x0C -> R.drawable.marker_skull
-            0x0D -> R.drawable.marker_dollar
-            0x0E -> R.drawable.marker_up
-            0x0F -> R.drawable.marker_down
-            0x10 -> R.drawable.marker_right
-            0x11 -> R.drawable.marker_left
-            0x12 -> R.drawable.marker_green_up
-            0x13 -> R.drawable.marker_green_down
-            else -> return null
-        }
-
-        return BitmapFactory.decodeResource(
-            resources,
-            drawableRes
         )
     }
 

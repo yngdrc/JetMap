@@ -2,7 +2,6 @@ package app.aventurine.jetmapdemo.data.models.marker.entities
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 import app.aventurine.jetmapdemo.data.models.LocalEntity
 
 @Entity(tableName = "marker", primaryKeys = ["x", "y", "floorId"])

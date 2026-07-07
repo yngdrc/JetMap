@@ -37,12 +37,4 @@ data class MarkerEntity(
             0x13 -> R.drawable.marker_green_down
             else -> throw IllegalArgumentException()
         }
-
-//    fun calculateX(mapConfig: JetMapConfig): Double {
-//        return ((x.toDouble() - mapConfig.leftMostTileCoordinate) / mapConfig.mapWidth)
-//    }
-//
-//    fun calculatedY(mapConfig: JetMapConfig): Double {
-//        return ((y.toDouble() - mapConfig.topMostTileCoordinate) / mapConfig.mapHeight)
-//    }
 }

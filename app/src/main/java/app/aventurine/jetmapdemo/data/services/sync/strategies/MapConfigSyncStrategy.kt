@@ -2,7 +2,6 @@ package app.aventurine.jetmapdemo.data.services.sync.strategies
 
 import app.aventurine.jetmapdemo.data.dataStore.DataStoreManager
 import app.aventurine.jetmapdemo.data.network.JetMapApiService
-import kotlinx.coroutines.Dispatchers
 
 class MapConfigSyncStrategy(
     dataStoreManager: DataStoreManager,

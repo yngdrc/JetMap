@@ -30,7 +30,7 @@ import app.aventurine.jetmapdemo.ui.modules.main.composables.MapOverlay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    mainViewModel: MainViewModel = hiltViewModel()
+    mainViewModel: MainViewModel = hiltViewModel(),
 ) {
     val focusedMarker by mainViewModel.jetMapController.gestureApi.focusedMarkerFlow
         .collectAsStateWithLifecycle()

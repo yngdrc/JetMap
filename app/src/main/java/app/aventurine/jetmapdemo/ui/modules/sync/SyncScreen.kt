@@ -16,12 +16,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.aventurine.jetmapdemo.data.models.config.entities.MapConfigLocalEntity
 import app.aventurine.jetmapdemo.data.services.sync.SyncState
 import app.aventurine.jetmapdemo.ui.modules.main.MainActivity
 
@@ -30,24 +30,37 @@ fun SyncScreen(
     syncViewModel: SyncViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val syncState by syncViewModel.syncService.syncStateFlow.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) {
-        syncViewModel.syncService.sync()
-    }
+    val syncState by syncViewModel.syncStateFlow.collectAsStateWithLifecycle()
+    val mapConfig by syncViewModel.mapConfigFlow.collectAsStateWithLifecycle(
+        initialValue = MapConfigLocalEntity.Empty
+    )
 
-    if (syncState is SyncState.Completed) {
-        val intent = Intent(context, MainActivity::class.java)
-//        return context.startActivity(intent)
+    LaunchedEffect(key1 = syncState, mapConfig) {
+        if (syncState !is SyncState.Completed) {
+            return@LaunchedEffect
+        }
+
+        if (mapConfig !is MapConfigLocalEntity.Default) {
+            return@LaunchedEffect
+        }
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            putExtra("mapConfig", mapConfig)
+        }
+
+        return@LaunchedEffect context.startActivity(intent)
     }
 
     SyncScreenContent(
-        syncState = syncState
+        syncState = syncState,
+        onRetry = { syncViewModel.sync() }
     )
 }
 
 @Composable
 fun SyncScreenContent(
-    syncState: SyncState
+    syncState: SyncState,
+    onRetry: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -67,10 +80,7 @@ fun SyncScreenContent(
 
             Text(text = syncState.text, color = MaterialTheme.colorScheme.onBackground)
             if (syncState is SyncState.Failed) {
-                Button(
-                    // TODO retry
-                    onClick = {},
-                ) {
+                Button(onClick = onRetry) {
                     Text(text = "Retry")
                 }
             }

@@ -2,7 +2,6 @@ package app.aventurine.jetmapdemo.data.services.sync.strategies
 
 import androidx.datastore.preferences.core.stringPreferencesKey
 import app.aventurine.jetmapdemo.data.dataStore.DataStoreManager
-import app.aventurine.jetmapdemo.data.dataStore.PreferencesKey
 
 abstract class SyncStrategy(
     protected val dataStoreManager: DataStoreManager

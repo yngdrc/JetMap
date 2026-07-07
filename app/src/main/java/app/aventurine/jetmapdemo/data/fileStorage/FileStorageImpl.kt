@@ -26,9 +26,9 @@ class FileStorageImpl @Inject constructor(
                 outputStream.write(fileData)
             }
 
-            Result.success(file)
+            Result.success(value = file)
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(exception = e)
         }
     }
 
@@ -40,11 +40,11 @@ class FileStorageImpl @Inject constructor(
 
         return try {
             if (!file.exists())
-                return Result.failure(FileNotFoundException())
+                return Result.failure(exception = FileNotFoundException())
 
-            return Result.success(file)
+            return Result.success(value = file)
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(exception = e)
         }
     }
 
@@ -52,10 +52,10 @@ class FileStorageImpl @Inject constructor(
         return try {
             val file = getFileIfExists(fileName = fileName).getOrThrow()
             file.inputStream().use { inputStream ->
-                Result.success(inputStream.readBytes())
+                Result.success(value = inputStream.readBytes())
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(exception = e)
         }
     }
 }

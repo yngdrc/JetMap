@@ -1,7 +1,6 @@
 package app.aventurine.jetmapdemo.data.services.sync
 
 import app.aventurine.jetmapdemo.data.dataStore.DataStoreManager
-import app.aventurine.jetmapdemo.data.dataStore.PreferencesKey
 import app.aventurine.jetmapdemo.data.fileStorage.FileStorage
 import app.aventurine.jetmapdemo.data.network.JetMapApiService
 import app.aventurine.jetmapdemo.data.repositories.ladder.LadderRepository
@@ -11,12 +10,9 @@ import app.aventurine.jetmapdemo.data.services.sync.strategies.MapConfigSyncStra
 import app.aventurine.jetmapdemo.data.services.sync.strategies.MarkerSyncStrategy
 import app.aventurine.jetmapdemo.data.services.sync.strategies.SyncStrategy
 import app.aventurine.jetmapdemo.data.services.sync.strategies.TileSyncStrategy
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import javax.inject.Inject
 
 class SyncService @Inject constructor(

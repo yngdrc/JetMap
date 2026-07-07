@@ -1,7 +1,6 @@
 package app.aventurine.jetmapdemo.data.repositories.ladder
 
 import app.aventurine.jetmap.ui.JetMapConfig
-import app.aventurine.jetmapdemo.data.models.ladder.GetLaddersRequest
 import app.aventurine.jetmapdemo.data.room.dao.LadderDao
 import app.aventurine.jetmapdemo.data.network.JetMapApiService
 import app.aventurine.jetmapdemo.data.models.ladder.entities.LadderEntity

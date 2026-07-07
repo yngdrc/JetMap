@@ -3,7 +3,6 @@ package app.aventurine.jetmapdemo.data.services.sync.strategies
 import app.aventurine.jetmap.controller.tile.TerrainType
 import app.aventurine.jetmapdemo.data.dataStore.DataStoreManager
 import app.aventurine.jetmapdemo.data.fileStorage.FileStorage
-import app.aventurine.jetmapdemo.data.models.config.entities.MapConfigLocalEntity
 import app.aventurine.jetmapdemo.data.models.tile.GetTileRequest
 import app.aventurine.jetmapdemo.data.network.JetMapApiService
 import retrofit2.HttpException
@@ -19,10 +18,6 @@ class TileSyncStrategy(
         return try {
             val mapConfig = dataStoreManager.getOrNull()
                 ?: return Result.failure(exception = RuntimeException("Map config not found"))
-
-            if (mapConfig !is MapConfigLocalEntity.Default) {
-                return Result.failure(exception = RuntimeException("Map config is empty"))
-            }
 
             for (x in mapConfig.minX..mapConfig.maxX step mapConfig.tileSize) {
                 for (y in mapConfig.minY..mapConfig.maxY step mapConfig.tileSize) {
