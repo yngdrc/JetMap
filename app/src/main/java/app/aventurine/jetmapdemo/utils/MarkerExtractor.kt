@@ -1,9 +1,9 @@
 package app.aventurine.jetmapdemo.utils
 
 import android.content.res.AssetManager
+import app.aventurine.jetmap.domain.models.MarkerEntity
+import app.aventurine.jetmap.domain.repositories.MarkerRepository
 import app.aventurine.jetmap.ui.JetMapConfig
-import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerLocalEntity
-import app.aventurine.jetmapdemo.data.repositories.marker.MarkerRepository
 import kotlinx.coroutines.Dispatchers
 
 class MarkerExtractor(
@@ -18,7 +18,7 @@ class MarkerExtractor(
     }
 
     suspend fun extractMarkers() = with(receiver = Dispatchers.IO) {
-        val markers = mutableListOf<MarkerLocalEntity>()
+        val markers = mutableListOf<MarkerEntity>()
         assetManager.open(MARKERS_PATH).use { inputStream ->
             var data = inputStream.readBytes()
             var block: ByteArray
@@ -41,7 +41,7 @@ class MarkerExtractor(
         return data.copyOfRange(startIndex, blockSize) + MARKER_END_BYTES
     }
 
-    private fun getMarkerData(block: ByteArray): MarkerLocalEntity? {
+    private fun getMarkerData(block: ByteArray): MarkerEntity? {
         val iterator = block.iterator()
         val dataMap = mutableMapOf<MarkerProperty, Any>()
 
@@ -173,10 +173,10 @@ class MarkerExtractor(
             }
         }
 
-        return MarkerLocalEntity(
+        return MarkerEntity(
             x = dataMap[MarkerProperty.X] as? Int ?: return null,
             y = dataMap[MarkerProperty.Y] as? Int ?: return null,
-            floorId = dataMap[MarkerProperty.Z] as? Int ?: return null,
+            floor = dataMap[MarkerProperty.Z] as? Int ?: return null,
             iconId = dataMap[MarkerProperty.ICON] as? Int ?: return null,
             description = dataMap[MarkerProperty.STRING] as? String ?: ""
         )

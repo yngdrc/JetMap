@@ -15,7 +15,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.JetMap"
         tools:targetApi="31">
-        <!--        TODO remove-->
         <activity
             android:name=".ui.modules.sync.SyncActivity"
             android:exported="true"

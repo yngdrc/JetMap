@@ -34,8 +34,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.max
+import app.aventurine.jetmap.domain.models.MarkerEntity
 import app.aventurine.jetmapdemo.R
-import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerEntity
+import app.aventurine.jetmapdemo.utils.iconDrawableRes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

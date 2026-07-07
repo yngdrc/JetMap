@@ -1,7 +1,7 @@
 package app.aventurine.jetmapdemo.di
 
-import app.aventurine.jetmapdemo.data.network.JetMapApiService
-import app.aventurine.jetmapdemo.data.network.host
+import app.aventurine.jetmap.data.network.api.JetMapApiService
+import app.aventurine.jetmap.data.network.host
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

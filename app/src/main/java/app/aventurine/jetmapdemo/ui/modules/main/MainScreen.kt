@@ -20,12 +20,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.aventurine.jetmap.ui.JetMap
 import app.aventurine.jetmap.controller.JetMapController
 import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
+import app.aventurine.jetmap.domain.models.MarkerEntity
 import app.aventurine.jetmap.utils.gestureApi
 import app.aventurine.jetmap.utils.motionApi
 import app.aventurine.jetmapdemo.R
-import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerEntity
 import app.aventurine.jetmapdemo.ui.modules.main.composables.BottomSheetContent
 import app.aventurine.jetmapdemo.ui.modules.main.composables.MapOverlay
+import app.aventurine.jetmapdemo.utils.iconDrawableRes
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,7 +125,7 @@ fun MainScreenContent(
                         focusedMarker = MarkerDescriptor(
                             x = markerEntity.x,
                             y = markerEntity.y,
-                            z = markerEntity.floorId,
+                            z = markerEntity.floor,
                             iconId = markerEntity.iconDrawableRes,
                             description = markerEntity.description
                         )

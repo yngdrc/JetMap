@@ -1,7 +1,7 @@
 package app.aventurine.jetmapdemo.di
 
-import app.aventurine.jetmapdemo.data.services.sync.SyncService
-import app.aventurine.jetmapdemo.data.services.sync.SyncServiceImpl
+import app.aventurine.jetmap.data.services.sync.SyncServiceImpl
+import app.aventurine.jetmap.domain.services.SyncService
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

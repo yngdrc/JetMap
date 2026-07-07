@@ -2,9 +2,9 @@ package app.aventurine.jetmapdemo.di
 
 import android.content.Context
 import androidx.room.Room
-import app.aventurine.jetmapdemo.data.room.JetMapDatabase
-import app.aventurine.jetmapdemo.data.room.dao.LadderDao
-import app.aventurine.jetmapdemo.data.room.dao.MarkerDao
+import app.aventurine.jetmap.data.room.JetMapDatabase
+import app.aventurine.jetmap.data.room.dao.LadderDao
+import app.aventurine.jetmap.data.room.dao.MarkerDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

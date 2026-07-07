@@ -21,8 +21,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.aventurine.jetmapdemo.data.models.config.entities.MapConfigLocalEntity
-import app.aventurine.jetmapdemo.data.services.sync.SyncState
+import app.aventurine.jetmap.domain.services.SyncState
 import app.aventurine.jetmapdemo.ui.modules.main.MainActivity
 
 @Composable
@@ -31,16 +30,14 @@ fun SyncScreen(
 ) {
     val context = LocalContext.current
     val syncState by syncViewModel.syncStateFlow.collectAsStateWithLifecycle()
-    val mapConfig by syncViewModel.mapConfigFlow.collectAsStateWithLifecycle(
-        initialValue = MapConfigLocalEntity.Empty
-    )
+    val mapConfig by syncViewModel.mapConfigFlow.collectAsStateWithLifecycle(initialValue = null)
 
     LaunchedEffect(key1 = syncState, mapConfig) {
         if (syncState !is SyncState.Completed) {
             return@LaunchedEffect
         }
 
-        if (mapConfig !is MapConfigLocalEntity.Default) {
+        if (mapConfig == null) {
             return@LaunchedEffect
         }
 
@@ -72,9 +69,10 @@ fun SyncScreenContent(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (syncState.progress != null) {
+            val progress = syncState.progress
+            if (progress != null) {
                 LinearProgressIndicator(
-                    progress = { syncState.progress }
+                    progress = { progress }
                 )
             }
 

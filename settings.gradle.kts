@@ -25,3 +25,5 @@ dependencyResolutionManagement {
 rootProject.name = "JetMap"
 include(":app")
 include(":jetmap")
+include(":data")
+include(":domain")

@@ -6,12 +6,14 @@ import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import app.aventurine.jetmap.controller.JetMapController
+import app.aventurine.jetmap.data.providers.MarkerProviderImpl
+import app.aventurine.jetmap.data.providers.TileProviderImpl
+import app.aventurine.jetmap.domain.fileStorage.FileStorage
+import app.aventurine.jetmap.domain.models.MapConfigEntity
+import app.aventurine.jetmap.domain.models.MarkerEntity
+import app.aventurine.jetmap.domain.repositories.MarkerRepository
+import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.ui.JetMapConfig
-import app.aventurine.jetmapdemo.data.fileStorage.FileStorage
-import app.aventurine.jetmapdemo.data.models.config.entities.MapConfigLocalEntity
-import app.aventurine.jetmapdemo.data.models.marker.entities.MarkerEntity
-import app.aventurine.jetmapdemo.data.providers.TileProvider
-import app.aventurine.jetmapdemo.data.repositories.marker.MarkerRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,8 +38,8 @@ class MainViewModel @Inject constructor(
     private val fileStorage: FileStorage,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-    val mapConfig: MapConfigLocalEntity.Default =
-        savedStateHandle.get<MapConfigLocalEntity.Default>(key = "mapConfig")
+    val mapConfig: MapConfigEntity =
+        savedStateHandle.get<MapConfigEntity>(key = "mapConfig")
             ?: throw IllegalArgumentException("MapConfig must be provided in SavedStateHandle")
 
     private val _queryStateFlow: MutableStateFlow<String> = MutableStateFlow("")
@@ -55,11 +57,15 @@ class MainViewModel @Inject constructor(
 
     fun onQueryChange(query: String) = _queryStateFlow.update { query }
 
-    val markerProvider: app.aventurine.jetmapdemo.data.providers.MarkerProvider =
-        app.aventurine.jetmapdemo.data.providers.MarkerProvider(
+    val markerProvider: MarkerProvider = MarkerProviderImpl(
             markerRepository = markerRepository,
             resources = resources
         )
+
+    val tileProvider = TileProviderImpl(
+        fileStorage = fileStorage,
+        mapConfig = mapConfig
+    )
 
     val jetMapController = JetMapController(
         config = JetMapConfig(
@@ -69,7 +75,7 @@ class MainViewModel @Inject constructor(
                 height = mapConfig.height
             ),
         ),
-        tileProvider = TileProvider(fileStorage = fileStorage, mapConfig = mapConfig),
+        tileProvider = tileProvider,
         markerProvider = markerProvider,
         assetManager = assetManager
     )

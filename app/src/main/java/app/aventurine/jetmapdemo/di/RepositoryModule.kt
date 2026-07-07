@@ -1,9 +1,9 @@
 package app.aventurine.jetmapdemo.di
 
-import app.aventurine.jetmapdemo.data.repositories.ladder.LadderRepository
-import app.aventurine.jetmapdemo.data.repositories.ladder.LadderRepositoryImpl
-import app.aventurine.jetmapdemo.data.repositories.marker.MarkerRepository
-import app.aventurine.jetmapdemo.data.repositories.marker.MarkerRepositoryImpl
+import app.aventurine.jetmap.data.repositories.LadderRepositoryImpl
+import app.aventurine.jetmap.data.repositories.MarkerRepositoryImpl
+import app.aventurine.jetmap.domain.repositories.LadderRepository
+import app.aventurine.jetmap.domain.repositories.MarkerRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
