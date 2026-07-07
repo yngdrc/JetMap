@@ -9,10 +9,14 @@ import androidx.datastore.preferences.preferencesDataStore
 import app.aventurine.jetmapdemo.data.models.config.entities.MapConfigEntity
 import app.aventurine.jetmapdemo.data.models.config.serializer.MapConfigJsonSerializer
 import app.aventurine.jetmapdemo.data.models.config.entities.MapConfigLocalEntity
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
+import javax.inject.Inject
 
-class DataStoreManagerImpl(private val context: Context) : DataStoreManager {
+class DataStoreManagerImpl @Inject constructor(
+    @param:ApplicationContext private val context: Context
+) : DataStoreManager {
     private val Context.preferencesDataStore: DataStore<Preferences> by preferencesDataStore(
         name = "config"
     )

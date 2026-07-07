@@ -7,7 +7,7 @@ import java.io.FileNotFoundException
 import javax.inject.Inject
 
 class FileStorageImpl @Inject constructor(
-    @field:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : FileStorage {
     override fun saveFile(
         fileName: String,
