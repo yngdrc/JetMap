@@ -39,7 +39,6 @@ class AStarPathFinder {
             val current = open.poll()!!
 
             if (current.offset == end) {
-                mapBitmap.recycle()
                 return@withContext generateSequence(current) { it.parent }
                     .map { it.offset }
                     .toList()
@@ -60,7 +59,6 @@ class AStarPathFinder {
             }
         }
 
-        mapBitmap.recycle()
         emptyList()
     }
 

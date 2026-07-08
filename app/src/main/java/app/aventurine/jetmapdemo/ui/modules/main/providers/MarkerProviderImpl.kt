@@ -26,11 +26,11 @@ class MarkerProviderImpl(
     override suspend fun getMarker(x: Int, y: Int, z: Int): MarkerDescriptor {
         val markerEntity = markerRepository.get(x = x, y = y, z = z)
         return MarkerDescriptor(
-            x = markerEntity?.x ?: x,
-            y = markerEntity?.y ?: y,
-            z = markerEntity?.floor ?: z,
-            iconId = markerEntity?.iconId ?: -1,
-            description = markerEntity?.description ?: "$x, $y"
+            x = x,
+            y = y,
+            z = z,
+            iconId = -1,
+            description = "$x, $y"
         )
     }
 

@@ -4,7 +4,6 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import app.aventurine.jetmap.controller.gesture.GestureController
 import app.aventurine.jetmap.controller.marker.MarkerController
@@ -130,24 +129,7 @@ class JetMapController(
                             y = markerDescriptor.y.toFloat()
                         ),
                         level = markerDescriptor.z,
-                        zoom = 5f
-                    )
-                }
-        }
-
-        scope.launch {
-            gestureController.focusedMarkerFlow
-                .collectLatest { markerDescriptor ->
-                    if (markerDescriptor == null) {
-                        return@collectLatest pathController.clear()
-                    }
-
-                    pathController.findPath(
-                        startingPoint = IntOffset(
-                            x = markerDescriptor.x,
-                            y = markerDescriptor.y
-                        ) to markerDescriptor.z,
-                        endingPoint = IntOffset(x = 612, y = 1198) to 8
+//                        zoom = 5f
                     )
                 }
         }
