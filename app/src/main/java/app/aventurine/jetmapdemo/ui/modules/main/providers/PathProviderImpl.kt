@@ -1,6 +1,7 @@
 package app.aventurine.jetmapdemo.ui.modules.main.providers
 
 import androidx.compose.ui.unit.IntOffset
+import app.aventurine.jetmap.domain.models.MapConfigEntity
 import app.aventurine.jetmap.domain.repositories.LadderRepository
 import app.aventurine.jetmapdemo.utils.AStarPathFinder
 import app.aventurine.jetmap.provider.PathProvider
@@ -8,9 +9,6 @@ import app.aventurine.jetmapdemo.utils.MinimapStitcher
 import app.aventurine.jetmapdemo.utils.Node
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 
 class PathProviderImpl(
     private val pathFinder: AStarPathFinder,
@@ -21,57 +19,50 @@ class PathProviderImpl(
         startingPoint: Pair<IntOffset, Int>,
         endingPoint: Pair<IntOffset, Int>
     ): List<IntOffset> {
-        val ladders = withContext(Dispatchers.IO) {
-            ladderRepository.getAllOffline().getOrDefault(
-                defaultValue = listOf()
-            ).filter { ladder ->
-                ladder.floor == 7
-            }
+        val (startOffset, startFloor) = startingPoint
+        val (endOffset, endFloor) = endingPoint
+
+        // TODO cch algorithm
+        if (startFloor == endFloor) {
+            return findPathForLevel(
+                startingPoint = startOffset,
+                endingPoint = endOffset,
+                floor = startFloor
+            )
         }
 
+        val allLadders = withContext(Dispatchers.IO) {
+            ladderRepository.getAllOffline().getOrDefault(defaultValue = listOf())
+        }
+
+        return listOf()
+    }
+
+    private suspend fun findPathForLevel(
+        startingPoint: IntOffset,
+        endingPoint: IntOffset,
+        floor: Int
+    ): List<IntOffset> {
         val mapBitmap = withContext(Dispatchers.IO) {
-            mapStitcher.stitch(floor = startingPoint.second)
+            mapStitcher.stitch(floor = floor)
         }
 
         if (mapBitmap == null) {
             return listOf()
         }
 
-        val basePath = pathFinder.aStar(
+        val path = pathFinder.aStar(
             start = Node(
-                offset = startingPoint.first,
+                offset = startingPoint,
                 g = 0,
                 h = 0,
                 parent = null
             ),
-            end = endingPoint.first,
+            end = endingPoint,
             mapBitmap = mapBitmap
         )
 
-        if (basePath.isNotEmpty()) {
-            return basePath
-        }
-
-        val pathFromLadders = coroutineScope {
-            ladders.map { ladder ->
-                async {
-                    pathFinder.aStar(
-                        start = Node(
-                            offset = IntOffset(x = ladder.x, y = ladder.y),
-                            g = 0,
-                            h = 0,
-                            parent = null
-                        ),
-                        end = endingPoint.first,
-                        mapBitmap = mapBitmap
-                    )
-                }
-            }.awaitAll()
-        }.filter { path ->
-            path.isNotEmpty()
-        }
-
         mapBitmap.recycle()
-        return pathFromLadders.minBy { it.size }
+        return path
     }
 }

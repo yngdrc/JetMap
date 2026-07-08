@@ -83,6 +83,7 @@ class MainViewModel @Inject constructor(
         pathFinder = AStarPathFinder(),
         mapStitcher = MinimapStitcher(
             context = context,
+            mapConfig = mapConfig
         ),
         ladderRepository = ladderRepository
     )
