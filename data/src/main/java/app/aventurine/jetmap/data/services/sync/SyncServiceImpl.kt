@@ -42,21 +42,23 @@ class SyncServiceImpl @Inject constructor(
         ),
         MarkerSyncStrategy(
             dataStoreManager = dataStoreManager,
-            markerRepository = markerRepository,
-            apiService = apiService
+            markerRepository = markerRepository
         ),
         LadderSyncStrategy(
             dataStoreManager = dataStoreManager,
-            ladderRepository = ladderRepository,
-            apiService = apiService
+            ladderRepository = ladderRepository
         )
     )
 
     override suspend fun sync() {
         _syncStateFlow.emit(value = SyncState.Initial)
-        val version = apiService.getVersion()
+        val version = try {
+            apiService.getVersion()
+        } catch (e: Exception) {
+            return _syncStateFlow.emit(value = SyncState.Failed(error = e))
+        }
 
-        _syncStateFlow.emit(SyncState.InProgress(progress = 0f))
+        _syncStateFlow.emit(value = SyncState.InProgress(progress = 0f))
         val strategies = syncStrategies.filter { strategy -> strategy.needsSync(version = version) }
 
         for (index in strategies.indices) {
@@ -65,14 +67,14 @@ class SyncServiceImpl @Inject constructor(
 
             if (result.isSuccess) {
                 val progress = (index + 1f) / strategies.size
-                _syncStateFlow.emit(SyncState.InProgress(progress = progress))
+                _syncStateFlow.emit(value = SyncState.InProgress(progress = progress))
             } else {
                 val error = result.exceptionOrNull() ?: RuntimeException("Unknown sync error")
-                _syncStateFlow.emit(SyncState.Failed(error = error))
+                _syncStateFlow.emit(value =SyncState.Failed(error = error))
                 return
             }
         }
 
-        _syncStateFlow.emit(SyncState.Completed)
+        _syncStateFlow.emit(value =SyncState.Completed)
     }
 }

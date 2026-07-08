@@ -1,5 +1,6 @@
 package app.aventurine.jetmap.data.services.sync.strategies
 
+import app.aventurine.jetmap.data.mappers.toEntity
 import app.aventurine.jetmap.data.network.api.JetMapApiService
 import app.aventurine.jetmap.domain.dataStore.DataStoreManager
 import app.aventurine.jetmap.domain.services.SyncStrategy

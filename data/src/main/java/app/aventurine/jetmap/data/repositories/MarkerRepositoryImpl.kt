@@ -1,7 +1,8 @@
 package app.aventurine.jetmap.data.repositories
 
+import app.aventurine.jetmap.data.mappers.toEntity
 import app.aventurine.jetmap.data.models.marker.entities.MarkerLocalEntity
-import app.aventurine.jetmap.data.models.marker.entities.toEntity
+import app.aventurine.jetmap.data.network.api.JetMapApiService
 import app.aventurine.jetmap.data.room.dao.MarkerDao
 import app.aventurine.jetmap.domain.models.MarkerEntity
 import app.aventurine.jetmap.domain.repositories.MarkerRepository
@@ -10,13 +11,38 @@ import javax.inject.Inject
 
 class MarkerRepositoryImpl @Inject constructor(
     private val markerDao: MarkerDao,
+    private val apiService: JetMapApiService
 ) : MarkerRepository() {
-    override suspend fun get(x: Int, y: Int, z: Int): MarkerEntity? {
-        return markerDao.get(x = x, y = y, z = z)?.toEntity()
+    override suspend fun getAllOnline(
+        returnOnPersistError: Boolean
+    ): Result<Collection<MarkerEntity>> = try {
+        val response = apiService.getMarkers()
+        val markers = response.markers.map { marker ->
+            marker.toEntity()
+        }
+
+        val persistError = persist(entities = markers).exceptionOrNull()
+        if (returnOnPersistError && persistError != null) {
+            return Result.failure(exception = persistError)
+        }
+
+        Result.success(value = markers)
+    } catch (e: Exception) {
+        Result.failure(exception = e)
     }
 
-    override suspend fun getAll(): Collection<MarkerEntity> {
-        return markerDao.getAll().map { markerLocalEntity -> markerLocalEntity.toEntity() }
+    override suspend fun getAllOffline(): Result<Collection<MarkerEntity>> = try {
+        val markers = markerDao.getAll().map { markerLocalEntity ->
+            markerLocalEntity.toEntity()
+        }
+
+        Result.success(value = markers)
+    } catch (e: Exception) {
+        Result.failure(exception = e)
+    }
+
+    override suspend fun get(x: Int, y: Int, z: Int): MarkerEntity? {
+        return markerDao.get(x = x, y = y, z = z)?.toEntity()
     }
 
     override suspend fun getMarkersByCoordinates(
@@ -35,7 +61,7 @@ class MarkerRepositoryImpl @Inject constructor(
         ).map { markerLocalEntity -> markerLocalEntity.toEntity() }
     }
 
-    override suspend fun persist(entities: List<MarkerEntity>) {
+    override suspend fun persist(entities: List<MarkerEntity>): Result<Unit> = try {
         markerDao.insert(
             localEntities = entities.map { entity ->
                 MarkerLocalEntity(
@@ -47,5 +73,9 @@ class MarkerRepositoryImpl @Inject constructor(
                 )
             }
         )
+
+        Result.success(value = Unit)
+    } catch (e: Exception) {
+        Result.failure(exception = e)
     }
 }

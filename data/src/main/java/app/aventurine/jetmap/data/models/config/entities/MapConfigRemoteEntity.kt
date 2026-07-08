@@ -1,7 +1,6 @@
 package app.aventurine.jetmap.data.models.config.entities
 
 import app.aventurine.jetmap.data.models.RemoteEntity
-import app.aventurine.jetmap.domain.models.MapConfigEntity
 import com.google.gson.annotations.SerializedName
 
 data class MapConfigRemoteEntity(
@@ -31,35 +30,4 @@ data class MapConfigRemoteEntity(
 
     val width: Int,
     val height: Int
-) : RemoteEntity() {
-    override fun toLocalEntity(): MapConfigLocalEntity {
-        return MapConfigLocalEntity.Default(
-            lowestFloor = lowestFloor,
-            baseFloor = baseFloor,
-            highestFloor = highestFloor,
-            tileSize = tileSize,
-            minX = minX,
-            minY = minY,
-            maxX = maxX,
-            maxY = maxY,
-            width = width,
-            height = height
-        )
-    }
-
-    override fun toEntity(): MapConfigEntity {
-        return MapConfigEntity(
-            lowestFloor = lowestFloor,
-            baseFloor = baseFloor,
-            highestFloor = highestFloor,
-            tileSize = tileSize,
-            minX = minX,
-            minY = minY,
-            maxX = maxX,
-            maxY = maxY,
-            width = width,
-            height = height
-        )
-    }
-
-}
+) : RemoteEntity()
