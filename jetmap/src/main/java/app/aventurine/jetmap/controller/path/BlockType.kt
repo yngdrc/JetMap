@@ -1,4 +1,4 @@
-package app.aventurine.jetmap.controller.pathfinding
+package app.aventurine.jetmap.controller.path
 
 import android.graphics.Color
 

@@ -1,16 +1,19 @@
-package app.aventurine.jetmap.utils
+package app.aventurine.jetmapdemo.utils
 
+import android.content.Context
 import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import app.aventurine.jetmap.controller.tile.TerrainType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class MinimapStitcher(
-    private val assetManager: AssetManager,
-    private val folder: String = "minimap",
-    private val filePrefix: String = "Minimap_Color_",
+    context: Context,
+    private val folder: File = context.filesDir,
+    private val filePrefix: String = "${TerrainType.NORMAL.name}_",
 ) {
     private data class TileInfo(
         val worldX: Int,
@@ -36,10 +39,13 @@ class MinimapStitcher(
         val maxX = tiles.maxOf { it.worldX }
         val maxY = tiles.maxOf { it.worldY }
 
-// Ustal rozmiar kafelka z pierwszego pliku
-        val probeBitmap = assetManager.open("$folder/${tiles.first().fileName}")
-            .use { BitmapFactory.decodeStream(it, null, options) }
-            ?: return@withContext null
+        // Ustal rozmiar kafelka z pierwszego pliku
+        val probeBitmap = File(
+            folder,
+            tiles.first().fileName
+        ).inputStream().use {
+            BitmapFactory.decodeStream(it, null, options)
+        } ?: return@withContext null
 
         val tileW = probeBitmap.width
         val tileH = probeBitmap.height
@@ -50,7 +56,7 @@ class MinimapStitcher(
         val result = Bitmap.createBitmap(canvasWidth, canvasHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
 
-// Narysuj pierwszy kafelek (już załadowany)
+        // Narysuj pierwszy kafelek (już załadowany)
         canvas.drawBitmap(
             probeBitmap,
             ((tiles.first().worldX - minX) / sampleSize).toFloat(),
@@ -59,10 +65,14 @@ class MinimapStitcher(
         )
         probeBitmap.recycle()
 
-// Narysuj pozostałe kafelki
+        // Narysuj pozostałe kafelki
         for (tile in tiles.drop(1)) {
-            val bitmap = assetManager.open("$folder/${tile.fileName}")
-                .use { BitmapFactory.decodeStream(it, null, options) } ?: continue
+            val bitmap = File(
+                folder,
+                tile.fileName
+            ).inputStream().use {
+                BitmapFactory.decodeStream(it, null, options)
+            } ?: continue
 
             canvas.drawBitmap(
                 bitmap,
@@ -77,8 +87,8 @@ class MinimapStitcher(
     }
 
     private fun listTiles(floor: Int): List<TileInfo> =
-        assetManager.list(folder)
-            ?.mapNotNull { parseFileName(it) }
+        folder.listFiles()
+            ?.mapNotNull { parseFileName(it.name) }
             ?.filter { it.floor == floor }
             ?: emptyList()
 

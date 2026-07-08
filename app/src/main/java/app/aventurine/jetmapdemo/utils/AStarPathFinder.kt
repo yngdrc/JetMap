@@ -1,8 +1,7 @@
-package app.aventurine.jetmap.controller.pathfinding
+package app.aventurine.jetmapdemo.utils
 
 import android.graphics.Bitmap
 import android.graphics.Color
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -11,7 +10,7 @@ import java.util.PriorityQueue
 import kotlin.math.absoluteValue
 import kotlin.math.min
 import androidx.core.graphics.get
-import app.aventurine.jetmap.utils.MinimapStitcher
+import app.aventurine.jetmap.controller.path.BlockType
 
 data class Node(
     val offset: IntOffset,

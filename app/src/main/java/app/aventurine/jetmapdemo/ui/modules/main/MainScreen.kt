@@ -23,6 +23,7 @@ import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
 import app.aventurine.jetmap.domain.models.MarkerEntity
 import app.aventurine.jetmap.utils.gestureApi
 import app.aventurine.jetmap.utils.motionApi
+import app.aventurine.jetmap.utils.pathApi
 import app.aventurine.jetmapdemo.R
 import app.aventurine.jetmapdemo.ui.modules.main.composables.BottomSheetContent
 import app.aventurine.jetmapdemo.ui.modules.main.composables.MapOverlay
@@ -58,7 +59,7 @@ fun MainScreen(
         searchResults = searchResults,
         onCloseBottomSheet = {
             mainViewModel.jetMapController.gestureApi.changeFocusedMarker(focusedMarker = null)
-            mainViewModel.jetMapController.pathfindingController.clear()
+            mainViewModel.jetMapController.pathApi.clear()
         },
         onQueryChange = mainViewModel::onQueryChange,
         onSearch = {}

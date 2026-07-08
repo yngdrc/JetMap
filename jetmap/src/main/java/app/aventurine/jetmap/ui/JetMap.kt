@@ -47,7 +47,7 @@ fun JetMap(
             val motionState by jetMapController.motionController.motionStateFlow.collectAsStateWithLifecycle()
             val tileState by jetMapController.tileController.tileStateFlow.collectAsStateWithLifecycle()
             val markerState by jetMapController.markerController.markerStateFlow.collectAsStateWithLifecycle()
-            val pathState by jetMapController.pathfindingController.pathStateFlow.collectAsStateWithLifecycle(
+            val pathState by jetMapController.pathController.pathStateFlow.collectAsStateWithLifecycle(
                 null
             )
 

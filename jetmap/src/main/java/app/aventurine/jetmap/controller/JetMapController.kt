@@ -1,6 +1,5 @@
 package app.aventurine.jetmap.controller
 
-import android.content.res.AssetManager
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
@@ -10,26 +9,22 @@ import androidx.compose.ui.unit.IntSize
 import app.aventurine.jetmap.controller.gesture.GestureController
 import app.aventurine.jetmap.controller.marker.MarkerController
 import app.aventurine.jetmap.controller.motion.MotionController
-import app.aventurine.jetmap.controller.pathfinding.AStarPathFinder
-import app.aventurine.jetmap.controller.pathfinding.PathfindingController
+import app.aventurine.jetmap.controller.path.PathController
 import app.aventurine.jetmap.controller.tile.TileController
 import app.aventurine.jetmap.provider.MarkerProvider
+import app.aventurine.jetmap.provider.PathProvider
 import app.aventurine.jetmap.provider.TileProvider
 import app.aventurine.jetmap.ui.JetMapConfig
-import app.aventurine.jetmap.utils.MinimapStitcher
 import app.aventurine.jetmap.utils.getVisibleAreaRect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -38,7 +33,7 @@ class JetMapController(
     val config: JetMapConfig,
     tileProvider: TileProvider,
     markerProvider: MarkerProvider,
-    assetManager: AssetManager
+    pathProvider: PathProvider?
 ) {
     private val scope = CoroutineScope(context = SupervisorJob() + Dispatchers.Main)
 
@@ -60,10 +55,9 @@ class JetMapController(
         parentScope = scope,
         markerProvider = markerProvider
     )
-    val pathfindingController: PathfindingController = PathfindingController(
+    internal val pathController: PathController = PathController(
         parentScope = scope,
-        pathFinder = AStarPathFinder(),
-        mapStitcher = MinimapStitcher(assetManager = assetManager)
+        pathProvider = pathProvider
     )
 
     private val _initializationState: MutableState<Boolean> = mutableStateOf(false)
@@ -141,21 +135,21 @@ class JetMapController(
                 }
         }
 
-//        scope.launch {
-//            gestureController.focusedMarkerFlow
-//                .collectLatest { markerDescriptor ->
-//                    if (markerDescriptor == null) {
-//                        return@collectLatest pathfindingController.clear()
-//                    }
-//
-//                    pathfindingController.findPath(
-//                        startingPoint = IntOffset(
-//                            x = markerDescriptor.x,
-//                            y = markerDescriptor.y
-//                        ) to markerDescriptor.z,
-//                        endingPoint = IntOffset(x = 612, y = 1198) to 8
-//                    )
-//                }
-//        }
+        scope.launch {
+            gestureController.focusedMarkerFlow
+                .collectLatest { markerDescriptor ->
+                    if (markerDescriptor == null) {
+                        return@collectLatest pathController.clear()
+                    }
+
+                    pathController.findPath(
+                        startingPoint = IntOffset(
+                            x = markerDescriptor.x,
+                            y = markerDescriptor.y
+                        ) to markerDescriptor.z,
+                        endingPoint = IntOffset(x = 612, y = 1198) to 8
+                    )
+                }
+        }
     }
 }

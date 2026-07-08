@@ -1,6 +1,5 @@
-package app.aventurine.jetmap.controller.pathfinding
+package app.aventurine.jetmap.controller.path
 
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntOffset
 
 data class PathState(
