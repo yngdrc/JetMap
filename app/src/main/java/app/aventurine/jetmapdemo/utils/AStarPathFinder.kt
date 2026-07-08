@@ -72,26 +72,7 @@ class AStarPathFinder {
             IntOffset(x - 1, y),
             IntOffset(x + 1, y),
         ).mapNotNull { offset ->
-            val pixel = try {
-                mapBitmap[offset.x, offset.y]
-            } catch (e: Exception) {
-                return@mapNotNull null
-            }
-
-            val r = Color.red(pixel)
-            val g = Color.green(pixel)
-            val b = Color.blue(pixel)
-            val color = Color.rgb(r, g, b)
-            if (!isWalkable(color)) {
-                return@mapNotNull null
-            }
-
-            Node(
-                offset = offset,
-                g = node.g + 10,
-                h = heuristic(offset, end),
-                parent = node
-            )
+            offset.toNode(mapBitmap = mapBitmap, node = node, end = end, isDiagonal = false)
         }
 
         val diagonal = listOf(
@@ -100,26 +81,7 @@ class AStarPathFinder {
             IntOffset(x + 1, y + 1),
             IntOffset(x - 1, y + 1),
         ).mapNotNull { offset ->
-            val pixel = try {
-                mapBitmap[offset.x, offset.y]
-            } catch (e: Exception) {
-                return@mapNotNull null
-            }
-
-            val r = Color.red(pixel)
-            val g = Color.green(pixel)
-            val b = Color.blue(pixel)
-            val color = Color.rgb(r, g, b)
-            if (!isWalkable(color)) {
-                return@mapNotNull null
-            }
-
-            Node(
-                offset = offset,
-                g = node.g + 14,
-                h = heuristic(offset, end),
-                parent = node
-            )
+            offset.toNode(mapBitmap = mapBitmap, node = node, end = end, isDiagonal = true)
         }
 
         return straight + diagonal
@@ -134,5 +96,33 @@ class AStarPathFinder {
     private fun isWalkable(color: Int): Boolean {
         val blockType = BlockType.fromColor(color)
         return blockType.isWalkable
+    }
+
+    private fun IntOffset.toNode(
+        mapBitmap: Bitmap,
+        node: Node,
+        end: IntOffset,
+        isDiagonal: Boolean
+    ): Node? {
+        val pixel = try {
+            mapBitmap[x, y]
+        } catch (e: Exception) {
+            return null
+        }
+
+        val r = Color.red(pixel)
+        val g = Color.green(pixel)
+        val b = Color.blue(pixel)
+        val color = Color.rgb(r, g, b)
+        if (!isWalkable(color)) {
+            return null
+        }
+
+        return Node(
+            offset = this,
+            g = node.g + if (isDiagonal) 24 else 10,
+            h = heuristic(this, end),
+            parent = node
+        )
     }
 }

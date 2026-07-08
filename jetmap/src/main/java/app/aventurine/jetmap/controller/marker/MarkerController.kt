@@ -140,15 +140,6 @@ internal class MarkerController(
         pinBitmap: Bitmap,
         canvas: Canvas
     ) {
-        if (focusedMarker != null && markers.none { marker -> marker.id == focusedMarker.id } && focusedMarker.z == level) {
-            canvas.nativeCanvas.drawBitmap(
-                pinBitmap,
-                focusedMarker.x.toFloat() - pinBitmap.width,
-                focusedMarker.y.toFloat() - pinBitmap.height,
-                null
-            )
-        }
-
         markers.forEach { marker ->
             var paint: Paint? = null
             if (focusedMarker?.id == marker.id) {
@@ -166,6 +157,15 @@ internal class MarkerController(
                 marker.x.toFloat() - marker.bitmap.width / 2,
                 marker.y.toFloat() - marker.bitmap.height / 2,
                 paint
+            )
+        }
+
+        if (focusedMarker != null && markers.none { marker -> marker.id == focusedMarker.id } && focusedMarker.z == level) {
+            canvas.nativeCanvas.drawBitmap(
+                pinBitmap,
+                focusedMarker.x.toFloat() - pinBitmap.width,
+                focusedMarker.y.toFloat() - pinBitmap.height,
+                null
             )
         }
     }
