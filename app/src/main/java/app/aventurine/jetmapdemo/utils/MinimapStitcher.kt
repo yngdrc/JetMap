@@ -15,7 +15,7 @@ class MinimapStitcher(
     context: Context,
     private val mapConfig: MapConfigEntity,
     private val folder: File = context.filesDir,
-    private val filePrefix: String = "${TerrainType.NORMAL.name}_",
+    private val filePrefix: String = "${TerrainType.WAYPOINT_COST.name}_",
 ) {
     private data class TileInfo(
         val x: Int,

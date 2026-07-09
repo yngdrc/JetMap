@@ -71,16 +71,17 @@ internal class TileController(
         level: Int,
         terrainType: TerrainType
     ) {
-        recycleTiles(visibleArea = visibleArea, level = level)
+        recycleTiles(visibleArea = visibleArea, level = level, terrainType = terrainType)
         getTiles(visibleArea = visibleArea, level = level, terrainType = terrainType)
     }
 
     private fun recycleTiles(
         visibleArea: VisibleArea,
-        level: Int
+        level: Int,
+        terrainType: TerrainType
     ) {
         val tilesToRecycle = _tileStateFlow.value.filter { tile ->
-            tile.shouldRecycle(visibleArea = visibleArea, level = level)
+            tile.shouldRecycle(visibleArea = visibleArea, level = level, terrainType = terrainType)
         }.toSet()
 
         _tileStateFlow.update { tiles ->
@@ -136,7 +137,8 @@ internal class TileController(
             x = tileDescriptor.x,
             y = tileDescriptor.y,
             z = tileDescriptor.z,
-            bitmap = tileBitmap
+            bitmap = tileBitmap,
+            terrainType = tileDescriptor.terrainType
         )
     }
 
@@ -151,6 +153,15 @@ internal class TileController(
                 tile.y.toFloat() * config.tileSize,
                 null
             )
+        }
+    }
+
+    override fun toggleTerrainType() {
+        _terrainTypeStateFlow.update { currentState ->
+            when (currentState) {
+                TerrainType.NORMAL -> TerrainType.WAYPOINT_COST
+                else -> TerrainType.NORMAL
+            }
         }
     }
 }

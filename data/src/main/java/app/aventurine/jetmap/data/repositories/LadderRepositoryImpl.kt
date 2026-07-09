@@ -6,6 +6,7 @@ import app.aventurine.jetmap.data.network.api.JetMapApiService
 import app.aventurine.jetmap.data.room.dao.LadderDao
 import app.aventurine.jetmap.domain.models.LadderEntity
 import app.aventurine.jetmap.domain.repositories.LadderRepository
+import app.aventurine.jetmap.ui.JetMapConfig
 import javax.inject.Inject
 
 class LadderRepositoryImpl @Inject constructor(
@@ -38,6 +39,28 @@ class LadderRepositoryImpl @Inject constructor(
         Result.success(value = ladders)
     } catch (e: Exception) {
         Result.failure(exception = e)
+    }
+
+    override suspend fun get(x: Int, y: Int, z: Int): LadderEntity? {
+        return ladderDao.get(x = x, y = y, floor = z)?.toEntity()
+    }
+
+    override suspend fun getLaddersByCoordinates(
+        coordinates: JetMapConfig.Coordinates,
+        floorId: Int
+    ): Collection<LadderEntity> {
+        return ladderDao.getLaddersByCoordinates(
+            coordinates = coordinates,
+            floorId = floorId
+        ).map { ladderLocalEntity -> ladderLocalEntity.toEntity() }
+    }
+
+    override suspend fun getConnectedLadder(x: Int, y: Int, floor: Int): LadderEntity? {
+        return ladderDao.getConnectedLadder(
+            x = x,
+            y = y,
+            floor = floor
+        )?.toEntity()
     }
 
     override suspend fun persist(

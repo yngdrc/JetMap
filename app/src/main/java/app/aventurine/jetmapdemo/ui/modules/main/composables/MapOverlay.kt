@@ -46,6 +46,8 @@ fun MapOverlay(
     searchResults: List<MarkerEntity>,
     currentLevel: Int,
     onChangeLevel: (Int) -> Unit,
+    onToggleMarkers: () -> Unit,
+    onToggleTerrainType: () -> Unit,
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onSearchResultTap: (MarkerEntity) -> Unit
@@ -137,6 +139,15 @@ fun MapOverlay(
             horizontalAlignment = Alignment.End
         ) {
             SmallFloatingActionButton(
+                onClick = onToggleMarkers
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = "Toggle markers"
+                )
+            }
+
+            SmallFloatingActionButton(
                 onClick = {
                     onChangeLevel(currentLevel - 1)
                 }
@@ -157,6 +168,15 @@ fun MapOverlay(
                     contentDescription = "Down"
                 )
             }
+
+            SmallFloatingActionButton(
+                onClick = onToggleTerrainType
+            ) {
+                Icon(
+                    painter = painterResource(android.R.drawable.ic_dialog_map),
+                    contentDescription = "Toggle terrain type"
+                )
+            }
         }
     }
 }
@@ -172,6 +192,8 @@ fun MapOverlayPreview() {
         onChangeLevel = {},
         onQueryChange = {},
         onSearch = {},
-        onSearchResultTap = {}
+        onSearchResultTap = {},
+        onToggleMarkers = {},
+        onToggleTerrainType = {}
     )
 }

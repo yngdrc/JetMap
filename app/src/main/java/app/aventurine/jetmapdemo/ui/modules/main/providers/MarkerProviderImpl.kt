@@ -3,6 +3,7 @@ package app.aventurine.jetmapdemo.ui.modules.main.providers
 import android.content.res.Resources
 import androidx.compose.ui.geometry.Rect
 import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
+import app.aventurine.jetmap.domain.repositories.LadderRepository
 import app.aventurine.jetmap.domain.repositories.MarkerRepository
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.ui.JetMapConfig
@@ -11,6 +12,7 @@ import java.io.InputStream
 
 class MarkerProviderImpl(
     private val markerRepository: MarkerRepository,
+    private val ladderRepository: LadderRepository,
     private val resources: Resources
 ) : MarkerProvider {
     override suspend fun getMarkerInputStream(
@@ -24,7 +26,16 @@ class MarkerProviderImpl(
     }
 
     override suspend fun getMarker(x: Int, y: Int, z: Int): MarkerDescriptor {
-        val markerEntity = markerRepository.get(x = x, y = y, z = z)
+//        val ladderEntity = ladderRepository.get(x = x, y = y, z = z)
+//        return MarkerDescriptor(
+//            x = ladderEntity?.x ?: x,
+//            y = ladderEntity?.y ?: y,
+//            z = ladderEntity?.floor ?: z,
+//            iconId = 0x13,
+//            description = "$x, $y"
+//        )
+
+//        val markerEntity = markerRepository.get(x = x, y = y, z = z)
         return MarkerDescriptor(
             x = x,
             y = y,
@@ -35,7 +46,7 @@ class MarkerProviderImpl(
     }
 
     override suspend fun getMarkers(visibleAreaRect: Rect, level: Int): List<MarkerDescriptor> {
-        return markerRepository.getMarkersByCoordinates(
+        return ladderRepository.getLaddersByCoordinates(
             coordinates = JetMapConfig.Coordinates(
                 startX = visibleAreaRect.left.toInt(),
                 startY = visibleAreaRect.top.toInt(),
@@ -43,14 +54,31 @@ class MarkerProviderImpl(
                 endY = visibleAreaRect.bottom.toInt()
             ),
             floorId = level
-        ).map { markerEntity ->
+        ).map { ladderEntity ->
             MarkerDescriptor(
-                x = markerEntity.x,
-                y = markerEntity.y,
-                z = markerEntity.floor,
-                description = markerEntity.description,
-                iconId = markerEntity.iconId
+                x = ladderEntity.x,
+                y = ladderEntity.y,
+                z = ladderEntity.floor,
+                description = "${ladderEntity.x}, ${ladderEntity.y}",
+                iconId = 0x13
             )
         }
+//        return markerRepository.getMarkersByCoordinates(
+//            coordinates = JetMapConfig.Coordinates(
+//                startX = visibleAreaRect.left.toInt(),
+//                startY = visibleAreaRect.top.toInt(),
+//                endX = visibleAreaRect.right.toInt(),
+//                endY = visibleAreaRect.bottom.toInt()
+//            ),
+//            floorId = level
+//        ).map { markerEntity ->
+//            MarkerDescriptor(
+//                x = markerEntity.x,
+//                y = markerEntity.y,
+//                z = markerEntity.floor,
+//                description = markerEntity.description,
+//                iconId = markerEntity.iconId
+//            )
+//        }
     }
 }

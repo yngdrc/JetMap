@@ -3,6 +3,7 @@ package app.aventurine.jetmapdemo.utils
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.ui.unit.IntOffset
+import androidx.core.graphics.ColorUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -10,6 +11,7 @@ import java.util.PriorityQueue
 import kotlin.math.absoluteValue
 import kotlin.math.min
 import androidx.core.graphics.get
+import androidx.core.graphics.luminance
 import app.aventurine.jetmap.controller.path.BlockType
 
 data class Node(
@@ -94,8 +96,10 @@ class AStarPathFinder {
     }
 
     private fun isWalkable(color: Int): Boolean {
-        val blockType = BlockType.fromColor(color)
-        return blockType.isWalkable
+//        val blockType = BlockType.fromColor(color)
+//        return blockType.isWalkable
+
+        return Color.rgb(255, 255, 0) != color
     }
 
     private fun IntOffset.toNode(
@@ -114,13 +118,18 @@ class AStarPathFinder {
         val g = Color.green(pixel)
         val b = Color.blue(pixel)
         val color = Color.rgb(r, g, b)
-        if (!isWalkable(color)) {
+        if (!isWalkable(color = color)) {
             return null
         }
 
+        val baseG = node.g + if (isDiagonal) 14 else 10
+
+        // grayscale r = g = b, consider using single channel
+        val frictionG = (ColorUtils.calculateLuminance(color) * 100).toInt()
+
         return Node(
             offset = this,
-            g = node.g + if (isDiagonal) 24 else 10,
+            g = baseG + frictionG,
             h = heuristic(this, end),
             parent = node
         )

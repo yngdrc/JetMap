@@ -44,17 +44,25 @@ fun JetMap(
         jetMapController.initialize(canvasSize = canvasSize)
 
         val canvasPlaceables = subcompose(slotId = JetMapController::class.java.name) {
-            val motionState by jetMapController.motionController.motionStateFlow.collectAsStateWithLifecycle()
-            val tileState by jetMapController.tileController.tileStateFlow.collectAsStateWithLifecycle()
-            val markerState by jetMapController.markerController.markerStateFlow.collectAsStateWithLifecycle()
-            val pathState by jetMapController.pathController.pathStateFlow.collectAsStateWithLifecycle(
-                null
-            )
+            val motionState by jetMapController.motionController.motionStateFlow
+                .collectAsStateWithLifecycle()
 
-            val level by jetMapController.motionController.levelStateFlow.collectAsStateWithLifecycle()
+            val tileState by jetMapController.tileController.tileStateFlow
+                .collectAsStateWithLifecycle()
+
+            val markerState by jetMapController.markerController.markerStateFlow
+                .collectAsStateWithLifecycle()
+
+            val pathState by jetMapController.pathController.pathStateFlow
+                .collectAsStateWithLifecycle(initialValue = null)
+
+            val level by jetMapController.motionController.levelStateFlow
+                .collectAsStateWithLifecycle()
+
             val focusedMarker by jetMapController.gestureController.focusedMarkerFlow
                 .collectAsStateWithLifecycle()
 
+            val uiState by jetMapController.uiController.uiState
             val pinBitmap = ImageBitmap.imageResource(id = myLocationResId).asAndroidBitmap()
 
             JetMapCanvas(
@@ -84,10 +92,11 @@ fun JetMap(
 
                 pathState?.let { pathState ->
                     drawIntoCanvas { canvas ->
+                        val pathData = pathState.pathData[level] ?: return@drawIntoCanvas
                         val path = Path().apply {
-                            pathState.pathData.forEachIndexed { index, offset ->
+                            pathData.forEachIndexed { index, offset ->
                                 val previous =
-                                    pathState.pathData.getOrNull(index - 1) ?: return@forEachIndexed
+                                    pathData.getOrNull(index - 1) ?: return@forEachIndexed
 
                                 moveTo(previous.x.toFloat(), previous.y.toFloat())
                                 lineTo(offset.x.toFloat(), offset.y.toFloat())
@@ -112,6 +121,7 @@ fun JetMap(
                         level = level,
                         pinBitmap = pinBitmap,
                         canvas = canvas,
+                        showMarkers = uiState.showMarkers
                     )
                 }
             }

@@ -138,35 +138,48 @@ internal class MarkerController(
         focusedMarker: MarkerDescriptor?,
         level: Int,
         pinBitmap: Bitmap,
-        canvas: Canvas
+        canvas: Canvas,
+        showMarkers: Boolean
     ) {
-        markers.forEach { marker ->
-            var paint: Paint? = null
-            if (focusedMarker?.id == marker.id) {
-                paint = Paint().apply {
-                    isFilterBitmap = false
-                    colorFilter = PorterDuffColorFilter(
-                        Color.White.copy(alpha = 0.2f).toArgb(),
-                        PorterDuff.Mode.SRC_ATOP
-                    )
-                }
-            }
-
-            canvas.nativeCanvas.drawBitmap(
-                marker.bitmap,
-                marker.x.toFloat() - marker.bitmap.width / 2,
-                marker.y.toFloat() - marker.bitmap.height / 2,
-                paint
-            )
+        if (focusedMarker == null) {
+            return
         }
 
-        if (focusedMarker != null && markers.none { marker -> marker.id == focusedMarker.id } && focusedMarker.z == level) {
-            canvas.nativeCanvas.drawBitmap(
-                pinBitmap,
-                focusedMarker.x.toFloat() - pinBitmap.width,
-                focusedMarker.y.toFloat() - pinBitmap.height,
-                null
-            )
-        }
+        canvas.nativeCanvas.drawBitmap(
+            pinBitmap,
+            focusedMarker.x.toFloat() - pinBitmap.width,
+            focusedMarker.y.toFloat() - pinBitmap.height,
+            null
+        )
+//        if (showMarkers) {
+//            markers.forEach { marker ->
+//                var paint: Paint? = null
+//                if (focusedMarker?.id == marker.id) {
+//                    paint = Paint().apply {
+//                        isFilterBitmap = false
+//                        colorFilter = PorterDuffColorFilter(
+//                            Color.White.copy(alpha = 0.2f).toArgb(),
+//                            PorterDuff.Mode.SRC_ATOP
+//                        )
+//                    }
+//                }
+//
+//                canvas.nativeCanvas.drawBitmap(
+//                    marker.bitmap,
+//                    marker.x.toFloat() - marker.bitmap.width / 2,
+//                    marker.y.toFloat() - marker.bitmap.height / 2,
+//                    paint
+//                )
+//            }
+//        }
+//
+//        if (focusedMarker != null && markers.none { marker -> marker.id == focusedMarker.id } && focusedMarker.z == level) {
+//            canvas.nativeCanvas.drawBitmap(
+//                pinBitmap,
+//                focusedMarker.x.toFloat() - pinBitmap.width,
+//                focusedMarker.y.toFloat() - pinBitmap.height,
+//                null
+//            )
+//        }
     }
 }

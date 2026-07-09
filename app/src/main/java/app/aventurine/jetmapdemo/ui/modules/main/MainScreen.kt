@@ -24,6 +24,8 @@ import app.aventurine.jetmap.domain.models.MarkerEntity
 import app.aventurine.jetmap.utils.gestureApi
 import app.aventurine.jetmap.utils.motionApi
 import app.aventurine.jetmap.utils.pathApi
+import app.aventurine.jetmap.utils.tileApi
+import app.aventurine.jetmap.utils.uiApi
 import app.aventurine.jetmapdemo.R
 import app.aventurine.jetmapdemo.ui.modules.main.composables.BottomSheetContent
 import app.aventurine.jetmapdemo.ui.modules.main.composables.MapOverlay
@@ -62,7 +64,13 @@ fun MainScreen(
             mainViewModel.jetMapController.pathApi.clear()
         },
         onQueryChange = mainViewModel::onQueryChange,
-        onSearch = {}
+        onSearch = {},
+        onToggleMarkers = {
+            mainViewModel.jetMapController.uiApi.toggleMarkers()
+        },
+        onToggleTerrainType = {
+            mainViewModel.jetMapController.tileApi.toggleTerrainType()
+        }
     )
 }
 
@@ -76,7 +84,9 @@ fun MainScreenContent(
     searchResults: List<MarkerEntity>,
     onCloseBottomSheet: () -> Unit,
     onQueryChange: (String) -> Unit,
-    onSearch: (String) -> Unit
+    onSearch: (String) -> Unit,
+    onToggleMarkers: () -> Unit,
+    onToggleTerrainType: () -> Unit
 ) {
     BottomSheetScaffold(
         modifier = Modifier.fillMaxSize(),
@@ -118,6 +128,8 @@ fun MainScreenContent(
                 searchResults = searchResults,
                 currentLevel = level,
                 onChangeLevel = jetMapController.motionApi::changeLevel,
+                onToggleMarkers = onToggleMarkers,
+                onToggleTerrainType = onToggleTerrainType,
                 onQueryChange = onQueryChange,
                 onSearch = onSearch,
                 onSearchResultTap = { markerEntity ->

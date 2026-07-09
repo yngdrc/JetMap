@@ -10,6 +10,7 @@ import app.aventurine.jetmap.controller.marker.MarkerController
 import app.aventurine.jetmap.controller.motion.MotionController
 import app.aventurine.jetmap.controller.path.PathController
 import app.aventurine.jetmap.controller.tile.TileController
+import app.aventurine.jetmap.controller.ui.UIController
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.provider.PathProvider
 import app.aventurine.jetmap.provider.TileProvider
@@ -59,7 +60,9 @@ class JetMapController(
         pathProvider = pathProvider
     )
 
-    private val _initializationState: MutableState<Boolean> = mutableStateOf(false)
+    internal val uiController: UIController = UIController()
+
+    private val _initializationState: MutableState<Boolean> = mutableStateOf(value = false)
     val initializationState: State<Boolean> = _initializationState
 
     fun initialize(canvasSize: IntSize) {
@@ -119,19 +122,19 @@ class JetMapController(
                 }
         }
 
-        scope.launch {
-            gestureController.focusedMarkerFlow
-                .filterNotNull()
-                .collectLatest { markerDescriptor ->
-                    motionController.moveTo(
-                        offset = Offset(
-                            x = markerDescriptor.x.toFloat(),
-                            y = markerDescriptor.y.toFloat()
-                        ),
-                        level = markerDescriptor.z,
+//        scope.launch {
+//            gestureController.focusedMarkerFlow
+//                .filterNotNull()
+//                .collectLatest { markerDescriptor ->
+//                    motionController.moveTo(
+//                        offset = Offset(
+//                            x = markerDescriptor.x.toFloat(),
+//                            y = markerDescriptor.y.toFloat()
+//                        ),
+//                        level = markerDescriptor.z,
 //                        zoom = 5f
-                    )
-                }
-        }
+//                    )
+//                }
+//        }
     }
 }

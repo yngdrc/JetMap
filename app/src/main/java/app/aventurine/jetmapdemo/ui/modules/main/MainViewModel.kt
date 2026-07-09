@@ -70,9 +70,10 @@ class MainViewModel @Inject constructor(
     fun onQueryChange(query: String) = _queryStateFlow.update { query }
 
     val markerProvider: MarkerProvider = MarkerProviderImpl(
-            markerRepository = markerRepository,
-            resources = resources
-        )
+        markerRepository = markerRepository,
+        ladderRepository = ladderRepository,
+        resources = resources
+    )
 
     val tileProvider = TileProviderImpl(
         fileStorage = fileStorage,
@@ -114,7 +115,7 @@ class MainViewModel @Inject constructor(
                             x = markerDescriptor.x,
                             y = markerDescriptor.y
                         ) to markerDescriptor.z,
-                        endingPoint = IntOffset(x = 539, y = 1114) to 7
+                        endingPoint = IntOffset(x = 1587, y = 940) to 8
                     )
                 }
         }

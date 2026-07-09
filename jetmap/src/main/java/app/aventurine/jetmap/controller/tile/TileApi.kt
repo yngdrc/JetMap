@@ -5,4 +5,6 @@ import kotlinx.coroutines.flow.StateFlow
 interface TileApi {
     val tileStateFlow: StateFlow<TileState>
     val terrainTypeStateFlow: StateFlow<TerrainType>
+
+    fun toggleTerrainType()
 }
