@@ -5,5 +5,5 @@ import androidx.compose.ui.unit.IntOffset
 data class PathState(
     val startingPoint: IntOffset,
     val endingPoint: IntOffset,
-    val pathData: Map<Int, List<IntOffset>>
+    val pathData: Map<Int, List<List<IntOffset>>>
 )

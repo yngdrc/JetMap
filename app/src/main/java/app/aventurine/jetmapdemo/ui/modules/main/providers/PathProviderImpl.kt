@@ -3,276 +3,232 @@ package app.aventurine.jetmapdemo.ui.modules.main.providers
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.ui.unit.IntOffset
+import app.aventurine.jetmap.domain.models.LadderEntity
 import app.aventurine.jetmap.domain.repositories.LadderRepository
-import app.aventurine.jetmapdemo.utils.AStarPathFinder
 import app.aventurine.jetmap.provider.PathProvider
+import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmapdemo.utils.AStarPathFinder
 import app.aventurine.jetmapdemo.utils.MinimapStitcher
 import app.aventurine.jetmapdemo.utils.Node
+import androidx.core.graphics.get
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import androidx.core.graphics.get
-import app.aventurine.jetmap.domain.models.LadderEntity
-import app.aventurine.jetmap.ui.JetMapConfig
+import java.util.BitSet
 
 class PathProviderImpl(
     private val pathFinder: AStarPathFinder,
     private val mapStitcher: MinimapStitcher,
     private val ladderRepository: LadderRepository
 ) : PathProvider {
+
+    companion object {
+        private val NEIGHBOR_DX = intArrayOf(0, 0, -1, 1, -1, -1, 1, 1)
+        private val NEIGHBOR_DY = intArrayOf(-1, 1, 0, 0, -1, 1, -1, 1)
+    }
+
+    private data class RegionResult(
+        val bits: BitSet,
+        val bitmapWidth: Int,
+        val minX: Int, val minY: Int,
+        val maxX: Int, val maxY: Int
+    ) {
+        fun contains(x: Int, y: Int): Boolean = bits.get(y * bitmapWidth + x)
+    }
+
     override suspend fun getPath(
         startingPoint: Pair<IntOffset, Int>,
         endingPoint: Pair<IntOffset, Int>
-    ): Map<Int, List<IntOffset>> {
+    ): Map<Int, List<List<IntOffset>>> {
         val (startOffset, startFloor) = startingPoint
         val (endOffset, endFloor) = endingPoint
 
-        val (startLadders, endLadders) = coroutineScope {
-            val startLadders = async { getLaddersInRegion(point = startOffset, floor = startFloor) }
-            val endLadders = async { getLaddersInRegion(point = endOffset, floor = endFloor) }
-
-            startLadders.await() to endLadders.await()
+        val bitmapCache = mutableMapOf<Int, Bitmap?>()
+        withContext(Dispatchers.IO) {
+            setOf(startFloor, endFloor).forEach { floor ->
+                bitmapCache[floor] = mapStitcher.stitch(floor)
+            }
         }
 
-        if (startLadders == endLadders) {
-            val mapBitmap = withContext(Dispatchers.IO) {
-                mapStitcher.stitch(floor = startFloor)
+        try {
+            val (startLadders, endLadders) = coroutineScope {
+                val startAsync = async { getLaddersInRegion(startOffset, startFloor, bitmapCache) }
+                val endAsync = async { getLaddersInRegion(endOffset, endFloor, bitmapCache) }
+                startAsync.await() to endAsync.await()
             }
 
-            if (mapBitmap == null) {
-                return mapOf()
-            }
-
-            val path = pathFinder.aStar(
-                start = Node(
-                    offset = startOffset,
-                    g = 0,
-                    h = 0,
-                    parent = null
-                ),
-                end = endOffset,
-                mapBitmap = mapBitmap
-            )
-
-            return mapOf(startFloor to path)
-        }
-
-        val startSubLadders = coroutineScope {
-            val visited = HashSet<LadderEntity>()
-            val l = mutableListOf<Collection<LadderEntity>>()
-
-            startLadders.mapNotNull { ladder ->
-                val connectedLadder = ladderRepository.getConnectedLadder(
-                    x = ladder.x,
-                    y = ladder.y,
-                    floor = ladder.floor
-                ) ?: return@mapNotNull null
-
-                if (visited.contains(connectedLadder)) {
-                    return@mapNotNull null
-                }
-
-                visited.add(connectedLadder)
-                val ladders = getLaddersInRegion(
-                    point = IntOffset(
-                        x = connectedLadder.x,
-                        y = connectedLadder.y
-                    ),
-                    floor = connectedLadder.floor
+            if (startLadders.toSet() == endLadders.toSet()) {
+                val bitmap = bitmapCache[startFloor] ?: return emptyMap()
+                return mapOf(
+                    startFloor to listOf(
+                        pathFinder.aStar(
+                            start = Node(offset = startOffset, g = 0, h = 0, parent = null),
+                            end = endOffset,
+                            mapBitmap = bitmap
+                        )
+                    )
                 )
-
-                l.add(ladders)
             }
 
-            l.distinct()
-        }
+            val route = findRoute(startLadders, endLadders, bitmapCache) ?: return emptyMap()
 
-        val endSubLadders = coroutineScope {
-            val visited = HashSet<LadderEntity>()
-            val l = mutableListOf<Collection<LadderEntity>>()
+            val result = mutableMapOf<Int, MutableList<List<IntOffset>>>()
 
-            endLadders.forEach { ladder ->
-                val connectedLadder = ladderRepository.getConnectedLadder(
-                    x = ladder.x,
-                    y = ladder.y,
-                    floor = ladder.floor
-                ) ?: return@forEach
-
-                if (visited.contains(connectedLadder)) {
-                    return@forEach
-                }
-
-                visited.add(connectedLadder)
-                val ladders = getLaddersInRegion(
-                    point = IntOffset(
-                        x = connectedLadder.x,
-                        y = connectedLadder.y
-                    ),
-                    floor = connectedLadder.floor
+            val (firstDeparture, _) = route.first()
+            bitmapCache[startFloor]?.let { bitmap ->
+                result.getOrPut(startFloor) { mutableListOf() }.add(
+                    pathFinder.aStar(
+                        start = Node(offset = startOffset, g = 0, h = 0, parent = null),
+                        end = IntOffset(firstDeparture.x, firstDeparture.y),
+                        mapBitmap = bitmap
+                    )
                 )
-
-                l.add(ladders)
             }
 
-            l.distinct()
-        }
-
-        val i = listOf(startLadders)
-            .plus(startSubLadders)
-            .intersect(
-                listOf(endLadders)
-                    .plus(endSubLadders)
-                    .toSet()
-            ).toList()
-
-        val result = i.fold(mutableMapOf<IntOffset, List<LadderEntity>>()) { current, next ->
-            val grouped = next.groupBy { IntOffset(it.x, it.y) }
-            grouped.forEach { (offset, entities) ->
-                current[offset] = current[offset]?.plus(entities) ?: entities
+            for (i in 0 until route.size - 1) {
+                val (_, arrival) = route[i]
+                val (nextDeparture, _) = route[i + 1]
+                bitmapCache[arrival.floor]?.let { bitmap ->
+                    result.getOrPut(arrival.floor) { mutableListOf() }.add(
+                        pathFinder.aStar(
+                            start = Node(offset = IntOffset(arrival.x, arrival.y), g = 0, h = 0, parent = null),
+                            end = IntOffset(nextDeparture.x, nextDeparture.y),
+                            mapBitmap = bitmap
+                        )
+                    )
+                }
             }
 
-            current
-        }.filter { entry ->
-            entry.value.size > 1
-        }.values.map { ladders ->
-            listOf(
-                startingPoint,
-                endingPoint
-            ).mapNotNull { (offset, floor) ->
-                val destination = ladders.firstOrNull { ladder ->
-                    ladder.floor == floor
-                } ?: return@mapNotNull null
-
-                val mapBitmap = withContext(Dispatchers.IO) {
-                    mapStitcher.stitch(floor = floor)
-                }
-
-                if (mapBitmap == null) {
-                    return mapOf()
-                }
-
-                val path = pathFinder.aStar(
-                    start = Node(
-                        offset = offset,
-                        g = 0,
-                        h = 0,
-                        parent = null
-                    ),
-                    end = IntOffset(destination.x, destination.y),
-                    mapBitmap = mapBitmap
+            val (_, lastArrival) = route.last()
+            bitmapCache[endFloor]?.let { bitmap ->
+                result.getOrPut(endFloor) { mutableListOf() }.add(
+                    pathFinder.aStar(
+                        start = Node(offset = IntOffset(lastArrival.x, lastArrival.y), g = 0, h = 0, parent = null),
+                        end = endOffset,
+                        mapBitmap = bitmap
+                    )
                 )
-
-                mapBitmap.recycle()
-                floor to path
             }
-        }.flatten().toMap()
 
-        return result
+            return result
+        } finally {
+            bitmapCache.values.forEach { it?.recycle() }
+        }
     }
 
-    private fun Bitmap.getRegionAt(x: Int, y: Int): Set<IntOffset> {
-        val startColor = this[x, y]
-        val startR = Color.red(startColor)
-        val startG = Color.green(startColor)
-        val startB = Color.blue(startColor)
-        val normalizedStart = Color.rgb(startR, startG, startB)
+    private suspend fun findRoute(
+        startLadders: Collection<LadderEntity>,
+        endLadders: Collection<LadderEntity>,
+        bitmapCache: MutableMap<Int, Bitmap?>
+    ): List<Pair<LadderEntity, LadderEntity>>? {
+        val endSet = endLadders.toSet()
 
-        if (normalizedStart == Color.rgb(255, 255, 0)) return emptySet()
+        val regionCache = mutableMapOf<Triple<Int, Int, Int>, Collection<LadderEntity>>()
 
-        val visited = HashSet<IntOffset>()
-        val queue = ArrayDeque<IntOffset>()
-        val start = IntOffset(x, y)
+        suspend fun regionOf(entry: LadderEntity): Collection<LadderEntity> {
+            val key = Triple(entry.x, entry.y, entry.floor)
+            return regionCache.getOrPut(key) {
+                if (entry.floor !in bitmapCache) {
+                    bitmapCache[entry.floor] = withContext(Dispatchers.IO) {
+                        mapStitcher.stitch(entry.floor)
+                    }
+                }
+                getLaddersInRegion(IntOffset(entry.x, entry.y), entry.floor, bitmapCache)
+            }
+        }
 
-        queue.add(start)
-        visited.add(start)
+        data class State(
+            val ladders: Collection<LadderEntity>,
+            val path: List<Pair<LadderEntity, LadderEntity>>
+        )
+
+        val queue = ArrayDeque<State>()
+        val visited = mutableSetOf(startLadders.toSet())
+        queue.add(State(startLadders, emptyList()))
+
+        while (queue.isNotEmpty()) {
+            val (currentLadders, path) = queue.removeFirst()
+
+            for (ladder in currentLadders) {
+                val connected = ladderRepository.getConnectedLadder(ladder.x, ladder.y, ladder.floor)
+                    ?: continue
+
+                val nextLadders = regionOf(connected)
+                val nextSet = nextLadders.toSet()
+
+                if (nextSet in visited) continue
+                visited.add(nextSet)
+
+                val newPath = path + (ladder to connected)
+
+                if (nextSet == endSet) return newPath
+
+                queue.add(State(nextLadders, newPath))
+            }
+        }
+
+        return null
+    }
+
+    private fun Int.isWalkable(): Boolean =
+        Color.red(this) != 255 || Color.green(this) != 255 || Color.blue(this) != 0
+
+    private fun Bitmap.computeRegion(startX: Int, startY: Int): RegionResult? {
+        if (!this[startX, startY].isWalkable()) return null
+
+        val bits = BitSet(width * height)
+        val queue = ArrayDeque<Int>()
+
+        var minX = startX; var minY = startY
+        var maxX = startX; var maxY = startY
+
+        bits.set(startY * width + startX)
+        queue.add(startY * width + startX)
 
         while (queue.isNotEmpty()) {
             val current = queue.removeFirst()
+            val cx = current % width
+            val cy = current / width
 
-            val neighbors = listOf(
-                IntOffset(current.x, current.y - 1),
-                IntOffset(current.x, current.y + 1),
-                IntOffset(current.x - 1, current.y),
-                IntOffset(current.x + 1, current.y),
-                IntOffset(current.x - 1, current.y - 1),
-                IntOffset(current.x - 1, current.y + 1),
-                IntOffset(current.x + 1, current.y - 1),
-                IntOffset(current.x + 1, current.y + 1),
-            )
-
-            for (neighbor in neighbors) {
-                if (neighbor in visited) continue
-                if (neighbor.x < 0 || neighbor.y < 0 || neighbor.x >= width || neighbor.y >= height) continue
-
-                val pixel = this[neighbor.x, neighbor.y]
-                val r = Color.red(pixel)
-                val g = Color.green(pixel)
-                val b = Color.blue(pixel)
-                val color = Color.rgb(r, g, b)
-
-                if (color != Color.rgb(255, 255, 0)) {
-                    visited.add(neighbor)
-                    queue.add(neighbor)
+            for (i in NEIGHBOR_DX.indices) {
+                val nx = cx + NEIGHBOR_DX[i]
+                val ny = cy + NEIGHBOR_DY[i]
+                if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+                val ni = ny * width + nx
+                if (bits.get(ni)) continue
+                if (this[nx, ny].isWalkable()) {
+                    bits.set(ni)
+                    if (nx < minX) minX = nx
+                    if (ny < minY) minY = ny
+                    if (nx > maxX) maxX = nx
+                    if (ny > maxY) maxY = ny
+                    queue.add(ni)
                 }
             }
         }
 
-        return visited
+        return RegionResult(bits, width, minX, minY, maxX, maxY)
     }
 
     private suspend fun getLaddersInRegion(
         point: IntOffset,
-        floor: Int
+        floor: Int,
+        bitmapCache: Map<Int, Bitmap?>
     ): Collection<LadderEntity> = try {
-        val mapBitmap = withContext(Dispatchers.IO) {
-            mapStitcher.stitch(floor = floor)
-        }
+        val bitmap = bitmapCache[floor] ?: return listOf()
+        val region = bitmap.computeRegion(point.x, point.y) ?: return listOf()
 
-        if (mapBitmap == null) {
-            return listOf()
-        }
-
-        val region = mapBitmap.getRegionAt(x = point.x, y = point.y)
-
-        val startX = region.minOf { region -> region.x }
-        val startY = region.minOf { region -> region.y }
-        val endX = region.maxOf { region -> region.x }
-        val endY = region.maxOf { region -> region.y }
-
-//        val regionBitmap = createBitmap(endX - startX, endY - startY)
-//        val regionCanvas = Canvas(regionBitmap).apply {
-//            region.forEach { r ->
-//                drawPoint(
-//                    endX - r.x.toFloat(),
-//                    endY - r.y.toFloat(),
-//                    Paint().apply {
-//                        isAntiAlias = false
-//                        isFilterBitmap = false
-//                        color = Color.RED
-//                    }
-//                )
-//            }
-//        }
-//
-//        regionBitmap.recycle()
-        val laddersInRegion = withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             ladderRepository.getLaddersByCoordinates(
                 coordinates = JetMapConfig.Coordinates(
-                    startX = startX,
-                    startY = startY,
-                    endX = endX,
-                    endY = endY
+                    startX = region.minX, startY = region.minY,
+                    endX = region.maxX, endY = region.maxY
                 ),
                 floorId = floor
-            ).filter { ladder ->
-                region.contains(IntOffset(x = ladder.x, y = ladder.y))
-            }
+            ).filter { ladder -> region.contains(ladder.x, ladder.y) }
         }
-
-        mapBitmap.recycle()
-        return laddersInRegion
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         listOf()
     }
 }

@@ -33,6 +33,12 @@ abstract class SyncStrategy(
         )
     }
 
+    suspend fun getSyncData(): String? {
+        return dataStoreManager.getOrNull(
+            key = stringPreferencesKey(name = id)
+        )
+    }
+
     suspend fun needsSync(version: String): Boolean {
         val lastSyncVersion = dataStoreManager.getOrNull(
             key = stringPreferencesKey(name = id)

@@ -115,7 +115,7 @@ class MainViewModel @Inject constructor(
                             x = markerDescriptor.x,
                             y = markerDescriptor.y
                         ) to markerDescriptor.z,
-                        endingPoint = IntOffset(x = 1587, y = 940) to 8
+                        endingPoint = IntOffset(x = 533, y = 1116) to 7
                     )
                 }
         }

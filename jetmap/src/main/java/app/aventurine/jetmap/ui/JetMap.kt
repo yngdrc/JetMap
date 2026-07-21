@@ -92,14 +92,15 @@ fun JetMap(
 
                 pathState?.let { pathState ->
                     drawIntoCanvas { canvas ->
-                        val pathData = pathState.pathData[level] ?: return@drawIntoCanvas
+                        val segments = pathState.pathData[level] ?: return@drawIntoCanvas
                         val path = Path().apply {
-                            pathData.forEachIndexed { index, offset ->
-                                val previous =
-                                    pathData.getOrNull(index - 1) ?: return@forEachIndexed
-
-                                moveTo(previous.x.toFloat(), previous.y.toFloat())
-                                lineTo(offset.x.toFloat(), offset.y.toFloat())
+                            // Każdy segment rysowany osobno — piętro może mieć wiele segmentów (np. most)
+                            segments.forEach { segment ->
+                                segment.forEachIndexed { index, offset ->
+                                    val previous = segment.getOrNull(index - 1) ?: return@forEachIndexed
+                                    moveTo(previous.x.toFloat(), previous.y.toFloat())
+                                    lineTo(offset.x.toFloat(), offset.y.toFloat())
+                                }
                             }
                         }
 
@@ -107,7 +108,7 @@ fun JetMap(
                             path,
                             Paint().apply {
                                 style = Paint.Style.STROKE
-                                color = android.graphics.Color.YELLOW
+                                color = android.graphics.Color.WHITE
                                 strokeWidth = 1f
                             }
                         )

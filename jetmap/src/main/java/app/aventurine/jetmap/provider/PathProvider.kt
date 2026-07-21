@@ -6,5 +6,5 @@ interface PathProvider {
     suspend fun getPath(
         startingPoint: Pair<IntOffset, Int>,
         endingPoint: Pair<IntOffset, Int>
-    ): Map<Int, List<IntOffset>>
+    ): Map<Int, List<List<IntOffset>>>
 }

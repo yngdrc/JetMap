@@ -55,6 +55,16 @@ class SyncServiceImpl @Inject constructor(
         val version = try {
             apiService.getVersion()
         } catch (e: Exception) {
+            val allSyncData = syncStrategies.mapNotNull { syncStrategy ->
+                syncStrategy.getSyncData()
+            }.filter { syncData ->
+                syncData.isNotEmpty()
+            }
+
+            if (allSyncData.size == syncStrategies.size && allSyncData.distinct().size == 1) {
+                return _syncStateFlow.emit(value = SyncState.Completed)
+            }
+
             return _syncStateFlow.emit(value = SyncState.Failed(error = e))
         }
 
