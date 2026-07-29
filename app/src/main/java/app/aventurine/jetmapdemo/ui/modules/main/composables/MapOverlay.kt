@@ -106,14 +106,15 @@ fun MapOverlay(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    modifier = Modifier.size(24.dp),
-                                    painter = painterResource(
-                                        id = getIconDrawableRes(iconId = searchResult.iconId)
-                                    ),
-                                    contentDescription = "Marker",
-                                    tint = null
-                                )
+                                    getIconDrawableRes(iconId = searchResult.iconId)
+                                    ?.let { iconDrawableRes ->
+                                    Icon(
+                                        modifier = Modifier.size(24.dp),
+                                        painter = painterResource(id = iconDrawableRes),
+                                        contentDescription = "Marker",
+                                        tint = null
+                                    )
+                                }
 
                                 Text(
                                     text = searchResult.description.ifEmpty {

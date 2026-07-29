@@ -7,46 +7,38 @@ import app.aventurine.jetmap.domain.repositories.LadderRepository
 import app.aventurine.jetmap.domain.repositories.MarkerRepository
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmapdemo.R
 import app.aventurine.jetmapdemo.utils.getIconDrawableRes
 import java.io.InputStream
 
 class MarkerProviderImpl(
     private val markerRepository: MarkerRepository,
-    private val ladderRepository: LadderRepository,
     private val resources: Resources
 ) : MarkerProvider {
     override suspend fun getMarkerInputStream(
         markerDescriptor: MarkerDescriptor
     ): InputStream? {
         return try {
-            resources.openRawResource(getIconDrawableRes(iconId = markerDescriptor.iconId))
+            resources.openRawResource(markerDescriptor.iconId ?: return null)
         } catch (e: Exception) {
             null
         }
     }
 
-    override suspend fun getMarker(x: Int, y: Int, z: Int): MarkerDescriptor {
-//        val ladderEntity = ladderRepository.get(x = x, y = y, z = z)
-//        return MarkerDescriptor(
-//            x = ladderEntity?.x ?: x,
-//            y = ladderEntity?.y ?: y,
-//            z = ladderEntity?.floor ?: z,
-//            iconId = 0x13,
-//            description = "$x, $y"
-//        )
-
-//        val markerEntity = markerRepository.get(x = x, y = y, z = z)
+    override suspend fun getMarker(x: Int, y: Int, z: Int, tapArea: Float): MarkerDescriptor {
+        val markerEntity = markerRepository.get(x = x, y = y, z = z, tapArea = tapArea)
         return MarkerDescriptor(
-            x = x,
-            y = y,
-            z = z,
-            iconId = -1,
-            description = "$x, $y"
+            x = markerEntity?.x ?: x,
+            y = markerEntity?.y ?: y,
+            z = markerEntity?.floor ?: z,
+            iconId = markerEntity?.iconId?.let(::getIconDrawableRes)
+                ?: R.drawable.ic_map_player,
+            description = markerEntity?.description ?: "$x, $y"
         )
     }
 
     override suspend fun getMarkers(visibleAreaRect: Rect, level: Int): List<MarkerDescriptor> {
-        return ladderRepository.getLaddersByCoordinates(
+        return markerRepository.getMarkersByCoordinates(
             coordinates = JetMapConfig.Coordinates(
                 startX = visibleAreaRect.left.toInt(),
                 startY = visibleAreaRect.top.toInt(),
@@ -54,31 +46,14 @@ class MarkerProviderImpl(
                 endY = visibleAreaRect.bottom.toInt()
             ),
             floorId = level
-        ).map { ladderEntity ->
+        ).map { markerEntity ->
             MarkerDescriptor(
-                x = ladderEntity.x,
-                y = ladderEntity.y,
-                z = ladderEntity.floor,
-                description = "${ladderEntity.x}, ${ladderEntity.y}",
-                iconId = 0x13
+                x = markerEntity.x,
+                y = markerEntity.y,
+                z = markerEntity.floor,
+                description = markerEntity.description,
+                iconId = getIconDrawableRes(iconId = markerEntity.iconId)
             )
         }
-//        return markerRepository.getMarkersByCoordinates(
-//            coordinates = JetMapConfig.Coordinates(
-//                startX = visibleAreaRect.left.toInt(),
-//                startY = visibleAreaRect.top.toInt(),
-//                endX = visibleAreaRect.right.toInt(),
-//                endY = visibleAreaRect.bottom.toInt()
-//            ),
-//            floorId = level
-//        ).map { markerEntity ->
-//            MarkerDescriptor(
-//                x = markerEntity.x,
-//                y = markerEntity.y,
-//                z = markerEntity.floor,
-//                description = markerEntity.description,
-//                iconId = markerEntity.iconId
-//            )
-//        }
     }
 }

@@ -21,7 +21,7 @@ class PathController(
     )
 
     private val _pathStateFlow: MutableStateFlow<PathState?> = MutableStateFlow(value = null)
-    val pathStateFlow: SharedFlow<PathState?> = _pathStateFlow.asSharedFlow()
+    override val pathStateFlow: SharedFlow<PathState?> = _pathStateFlow.asSharedFlow()
 
     private var job: Job? = null
 
@@ -37,13 +37,18 @@ class PathController(
         }
 
         job = scope.launch(Dispatchers.Default) {
+            _pathStateFlow.update { PathState.FindingRoute }
             val pathData = pathProvider.getPath(
                 startingPoint = startingPoint,
                 endingPoint = endingPoint
             )
 
+            if (pathData.isEmpty()) {
+                return@launch _pathStateFlow.update { PathState.RouteNotFound }
+            }
+
             _pathStateFlow.update {
-                PathState(
+                PathState.RouteFound(
                     startingPoint = startingPoint.first,
                     endingPoint = endingPoint.first,
                     pathData = pathData

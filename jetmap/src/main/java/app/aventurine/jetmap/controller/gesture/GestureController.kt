@@ -1,8 +1,5 @@
 package app.aventurine.jetmap.controller.gesture
 
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import app.aventurine.jetmap.controller.motion.MotionState
 import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
@@ -28,8 +25,9 @@ internal class GestureController(
         context = parentScope.coroutineContext + SupervisorJob()
     )
 
-    private val _tapFlow: MutableSharedFlow<Pair<Offset, Int>?> = MutableStateFlow(value = null)
-    internal val tapFlow: SharedFlow<Pair<Offset, Int>?> = _tapFlow.shareIn(
+    private val _tapFlow: MutableSharedFlow<Triple<Offset, Int, Float>?> =
+        MutableStateFlow(value = null)
+    internal val tapFlow: SharedFlow<Triple<Offset, Int, Float>?> = _tapFlow.shareIn(
         scope = scope,
         started = SharingStarted.WhileSubscribed(),
         replay = 0
@@ -40,26 +38,35 @@ internal class GestureController(
     override val focusedMarkerFlow: StateFlow<MarkerDescriptor?> = _focusedMarkerFlow.asStateFlow()
 
     internal fun onTap(
+        tapArea: Float,
         offset: Offset,
         motionState: MotionState,
         level: Int
     ) {
         scope.launch {
             _tapFlow.emit(
-                value = offset.div(operand = motionState.zoom).plus(other = motionState.centroid)
-                    .rotateBy(angle = -motionState.rotation) to level
+                value = Triple(
+                    offset
+                        .div(operand = motionState.zoom)
+                        .plus(other = motionState.centroid)
+                        .rotateBy(angle = -motionState.rotation),
+                    level,
+                    tapArea
+                )
             )
         }
     }
 
     internal suspend fun onMarkerFocusChanged(
         offset: Offset,
-        level: Int
+        level: Int,
+        tapArea: Float
     ) {
         val markerDescriptor = markerProvider.getMarker(
             x = offset.x.toInt(),
             y = offset.y.toInt(),
-            z = level
+            z = level,
+            tapArea = tapArea
         )
 
         changeFocusedMarker(focusedMarker = markerDescriptor)

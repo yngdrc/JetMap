@@ -41,8 +41,13 @@ class MarkerRepositoryImpl @Inject constructor(
         Result.failure(exception = e)
     }
 
-    override suspend fun get(x: Int, y: Int, z: Int): MarkerEntity? {
-        return markerDao.get(x = x, y = y, z = z)?.toEntity()
+    override suspend fun get(
+        x: Int,
+        y: Int,
+        z: Int,
+        tapArea: Float
+    ): MarkerEntity? {
+        return markerDao.get(x = x, y = y, z = z, tapArea = tapArea)?.toEntity()
     }
 
     override suspend fun getMarkersByCoordinates(

@@ -11,8 +11,8 @@ interface MarkerDao : BaseDao<MarkerLocalEntity> {
     @Query("SELECT * FROM marker")
     suspend fun getAll(): List<MarkerLocalEntity>
 
-    @Query("SELECT * FROM marker WHERE x BETWEEN :x - 10 AND :x + 10 AND y BETWEEN :y - 10 AND :y + 10 AND floor = :z LIMIT 1")
-    suspend fun get(x: Int, y: Int, z: Int): MarkerLocalEntity?
+    @Query("SELECT * FROM marker WHERE x BETWEEN :x - :tapArea AND :x + :tapArea AND y BETWEEN :y - :tapArea AND :y + :tapArea AND floor = :z LIMIT 1")
+    suspend fun get(x: Int, y: Int, z: Int, tapArea: Float): MarkerLocalEntity?
 
     @Query("SELECT * FROM marker WHERE x BETWEEN :startX AND :endX AND y BETWEEN :startY AND :endY AND floor = :floorId")
     suspend fun getMarkersByCoordinates(

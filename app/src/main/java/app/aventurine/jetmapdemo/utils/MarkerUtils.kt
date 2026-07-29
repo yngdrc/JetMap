@@ -1,8 +1,10 @@
 package app.aventurine.jetmapdemo.utils
 
+import androidx.annotation.DrawableRes
 import app.aventurine.jetmapdemo.R
 
-fun getIconDrawableRes(iconId: Int): Int {
+@DrawableRes
+fun getIconDrawableRes(iconId: Int): Int? {
     return when (iconId) {
         0x00 -> R.drawable.marker_checkmark
         0x01 -> R.drawable.marker_questionmark
@@ -24,6 +26,6 @@ fun getIconDrawableRes(iconId: Int): Int {
         0x11 -> R.drawable.marker_left
         0x12 -> R.drawable.marker_green_up
         0x13 -> R.drawable.marker_green_down
-        else -> throw IllegalArgumentException()
+        else -> null
     }
 }

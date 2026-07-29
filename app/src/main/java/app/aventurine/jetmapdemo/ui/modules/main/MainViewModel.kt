@@ -2,6 +2,9 @@ package app.aventurine.jetmapdemo.ui.modules.main
 
 import android.content.Context
 import android.content.res.Resources
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.SavedStateHandle
@@ -20,6 +23,7 @@ import app.aventurine.jetmap.ui.JetMapConfig
 import app.aventurine.jetmap.utils.gestureApi
 import app.aventurine.jetmap.utils.pathApi
 import app.aventurine.jetmapdemo.ui.modules.main.providers.PathProviderImpl
+import app.aventurine.jetmapdemo.ui.modules.main.states.MainBottomSheetUIState
 import app.aventurine.jetmapdemo.utils.AStarPathFinder
 import app.aventurine.jetmapdemo.utils.MinimapStitcher
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -33,6 +37,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -50,28 +55,34 @@ class MainViewModel @Inject constructor(
     private val fileStorage: FileStorage,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-    val mapConfig: MapConfigEntity =
-        savedStateHandle.get<MapConfigEntity>(key = "mapConfig")
-            ?: throw IllegalArgumentException("MapConfig must be provided in SavedStateHandle")
+    private val mapConfig: MapConfigEntity = savedStateHandle.get<MapConfigEntity>(
+        key = "mapConfig"
+    ) ?: throw IllegalArgumentException("MapConfig must be provided in SavedStateHandle")
 
-    private val _queryStateFlow: MutableStateFlow<String> = MutableStateFlow("")
+    private val _bottomSheetUIState: MutableState<MainBottomSheetUIState> =
+        mutableStateOf(value = MainBottomSheetUIState.Initial)
+
+    val bottomSheetUIState: State<MainBottomSheetUIState> = _bottomSheetUIState
+    fun setBottomSheetUIState(uiState: MainBottomSheetUIState) {
+        _bottomSheetUIState.value = uiState
+    }
+
+    private val _queryStateFlow: MutableStateFlow<String> = MutableStateFlow(value = "")
     val queryStateFlow: StateFlow<String> = _queryStateFlow.asStateFlow()
+    fun onQueryChange(query: String) = _queryStateFlow.update { query }
 
     val searchResultsFlow: StateFlow<List<MarkerEntity>> = queryStateFlow
         .debounce(300.milliseconds)
-        .map { query ->
-            markerRepository.search(query = query)
-        }.stateIn(
-            scope = CoroutineScope(Dispatchers.IO),
+        .map { query -> markerRepository.search(query = query) }
+        .flowOn(context = Dispatchers.IO)
+        .stateIn(
+            scope = viewModelScope,
             started = SharingStarted.Lazily,
             initialValue = emptyList()
         )
 
-    fun onQueryChange(query: String) = _queryStateFlow.update { query }
-
     val markerProvider: MarkerProvider = MarkerProviderImpl(
         markerRepository = markerRepository,
-        ladderRepository = ladderRepository,
         resources = resources
     )
 
@@ -90,6 +101,10 @@ class MainViewModel @Inject constructor(
     )
 
     val jetMapController = JetMapController(
+        parentScope = viewModelScope,
+        tileProvider = tileProvider,
+        markerProvider = markerProvider,
+        pathProvider = pathProvider,
         config = JetMapConfig(
             tileSize = mapConfig.tileSize,
             mapSize = IntSize(
@@ -97,26 +112,57 @@ class MainViewModel @Inject constructor(
                 height = mapConfig.height
             ),
         ),
-        tileProvider = tileProvider,
-        markerProvider = markerProvider,
-        pathProvider = pathProvider
     )
 
     init {
         viewModelScope.launch {
             jetMapController.gestureApi.focusedMarkerFlow
                 .collectLatest { markerDescriptor ->
-                    if (markerDescriptor == null) {
-                        return@collectLatest jetMapController.pathApi.clear()
-                    }
+                    jetMapController.pathApi.clear()
 
-                    jetMapController.pathApi.findPath(
-                        startingPoint = IntOffset(
-                            x = markerDescriptor.x,
-                            y = markerDescriptor.y
-                        ) to markerDescriptor.z,
-                        endingPoint = IntOffset(x = 533, y = 1116) to 7
-                    )
+                    when (val currentBottomSheetUIState = bottomSheetUIState.value) {
+                        is MainBottomSheetUIState.Initial -> {
+                            if (markerDescriptor == null) {
+                                return@collectLatest
+                            }
+
+                            val newBottomSheetUIState = MainBottomSheetUIState.MarkerDetails(
+                                markerDescriptor = markerDescriptor
+                            )
+
+                            setBottomSheetUIState(uiState = newBottomSheetUIState)
+                        }
+
+                        is MainBottomSheetUIState.MarkerDetails -> {
+                            val newBottomSheetUIState = markerDescriptor
+                                ?.let(currentBottomSheetUIState::copy)
+                                ?: MainBottomSheetUIState.Initial
+
+                            setBottomSheetUIState(uiState = newBottomSheetUIState)
+                        }
+
+                        is MainBottomSheetUIState.Navigation -> {
+                            val newBottomSheetUIState = currentBottomSheetUIState.copy(
+                                startMarkerDescriptor = markerDescriptor
+                            )
+
+                            setBottomSheetUIState(uiState = newBottomSheetUIState)
+                            if (newBottomSheetUIState.startMarkerDescriptor == null) {
+                                return@collectLatest
+                            }
+
+                            jetMapController.pathApi.findPath(
+                                startingPoint = IntOffset(
+                                    x = newBottomSheetUIState.startMarkerDescriptor.x,
+                                    y = newBottomSheetUIState.startMarkerDescriptor.y
+                                ) to newBottomSheetUIState.startMarkerDescriptor.z,
+                                endingPoint = IntOffset(
+                                    x = newBottomSheetUIState.endMarkerDescriptor.x,
+                                    y = newBottomSheetUIState.endMarkerDescriptor.y
+                                ) to newBottomSheetUIState.endMarkerDescriptor.z
+                            )
+                        }
+                    }
                 }
         }
     }

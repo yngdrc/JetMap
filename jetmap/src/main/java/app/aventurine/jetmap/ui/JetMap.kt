@@ -26,8 +26,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.dp
 import app.aventurine.jetmap.controller.JetMapController
+import app.aventurine.jetmap.controller.path.PathState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +73,7 @@ fun JetMap(
                     detectTapGestures(
                         onTap = { offset ->
                             jetMapController.gestureController.onTap(
+                                tapArea = 11.toDp().toPx() / 2,
                                 offset = offset,
                                 motionState = motionState,
                                 level = level
@@ -91,6 +95,10 @@ fun JetMap(
                 }
 
                 pathState?.let { pathState ->
+                    if (pathState !is PathState.RouteFound) {
+                        return@let
+                    }
+
                     drawIntoCanvas { canvas ->
                         val segments = pathState.pathData[level] ?: return@drawIntoCanvas
                         val path = Path().apply {

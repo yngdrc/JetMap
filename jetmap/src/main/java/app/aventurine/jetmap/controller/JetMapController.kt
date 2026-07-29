@@ -20,22 +20,27 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(FlowPreview::class)
 class JetMapController(
-    val config: JetMapConfig,
+    parentScope: CoroutineScope,
     tileProvider: TileProvider,
     markerProvider: MarkerProvider,
-    pathProvider: PathProvider?
+    pathProvider: PathProvider?,
+    val config: JetMapConfig,
 ) {
-    private val scope = CoroutineScope(context = SupervisorJob() + Dispatchers.Main)
+    private val scope = CoroutineScope(
+        context = parentScope.coroutineContext + SupervisorJob() + Dispatchers.Main
+    )
 
     internal lateinit var motionController: MotionController
 
@@ -114,10 +119,11 @@ class JetMapController(
         scope.launch {
             gestureController.tapFlow
                 .filterNotNull()
-                .collectLatest { (offset, level) ->
+                .collectLatest { (offset, level, tapArea) ->
                     gestureController.onMarkerFocusChanged(
                         offset = offset,
-                        level = level
+                        level = level,
+                        tapArea = tapArea
                     )
                 }
         }

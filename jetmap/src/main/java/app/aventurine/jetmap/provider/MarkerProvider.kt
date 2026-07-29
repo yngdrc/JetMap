@@ -12,7 +12,8 @@ interface MarkerProvider {
     suspend fun getMarker(
         x: Int,
         y: Int,
-        z: Int
+        z: Int,
+        tapArea: Float
     ): MarkerDescriptor
 
     suspend fun getMarkers(

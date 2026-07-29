@@ -39,7 +39,6 @@ internal class MotionController(
         context = parentScope.coroutineContext + SupervisorJob()
     )
 
-    private var moveJob: Job? = null
     private val minZoom = calculateInitialZoom(canvasSize = canvasSize, config = config)
 
     private val _motionStateFlow: MutableStateFlow<MotionState> = MutableStateFlow(
@@ -66,6 +65,8 @@ internal class MotionController(
     private val _levelStateFlow = MutableStateFlow(value = 7)
     override val levelStateFlow: StateFlow<Int> = _levelStateFlow.asStateFlow()
     override fun changeLevel(level: Int) = _levelStateFlow.update { level }
+
+    private var moveJob: Job? = null
 
     internal fun onGesture(
         centroid: Offset,
