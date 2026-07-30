@@ -1,46 +1,78 @@
 package app.aventurine.jetmap.controller.gesture
 
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.geometry.Offset
 import app.aventurine.jetmap.controller.motion.MotionState
-import app.aventurine.jetmap.models.Marker
+import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
+import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.utils.rotateBy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
-internal class GestureController : GestureApi {
-    private val _tapState: MutableStateFlow<Offset?> = MutableStateFlow(null)
-    private val _focusedMarker: MutableState<FocusedMarker?> = mutableStateOf(null)
+internal class GestureController(
+    parentScope: CoroutineScope,
+    private val markerProvider: MarkerProvider
+) : GestureApi {
+    private val scope: CoroutineScope = CoroutineScope(
+        context = parentScope.coroutineContext + SupervisorJob()
+    )
 
-    override val tapState: StateFlow<Offset?> = _tapState
-    override val focusedMarker: State<FocusedMarker?> = _focusedMarker
+    private val _tapFlow: MutableSharedFlow<Triple<Offset, Int, Float>?> =
+        MutableStateFlow(value = null)
+    internal val tapFlow: SharedFlow<Triple<Offset, Int, Float>?> = _tapFlow.shareIn(
+        scope = scope,
+        started = SharingStarted.WhileSubscribed(),
+        replay = 0
+    )
+
+    private val _focusedMarkerFlow: MutableStateFlow<MarkerDescriptor?> =
+        MutableStateFlow(value = null)
+    override val focusedMarkerFlow: StateFlow<MarkerDescriptor?> = _focusedMarkerFlow.asStateFlow()
 
     internal fun onTap(
+        tapArea: Float,
         offset: Offset,
-        motionState: MotionState
+        motionState: MotionState,
+        level: Int
     ) {
-        _tapState.value = offset.div(motionState.zoom).plus(motionState.centroid)
-            .rotateBy(-motionState.rotation)
+        scope.launch {
+            _tapFlow.emit(
+                value = Triple(
+                    offset
+                        .div(operand = motionState.zoom)
+                        .plus(other = motionState.centroid)
+                        .rotateBy(angle = -motionState.rotation),
+                    level,
+                    tapArea
+                )
+            )
+        }
     }
 
-    internal fun onMarkerFocusChanged(
-        tapState: Offset,
-        existingMarker: Marker?
+    internal suspend fun onMarkerFocusChanged(
+        offset: Offset,
+        level: Int,
+        tapArea: Float
     ) {
-        _focusedMarker.value = Triple(
-            existingMarker?.let { marker ->
-                Offset(marker.x.toFloat(), marker.y.toFloat())
-            } ?: tapState,
-            existingMarker?.description ?: "${tapState.x}, ${tapState.y}",
-            existingMarker != null
+        val markerDescriptor = markerProvider.getMarker(
+            x = offset.x.toInt(),
+            y = offset.y.toInt(),
+            z = level,
+            tapArea = tapArea
         )
+
+        changeFocusedMarker(focusedMarker = markerDescriptor)
     }
 
-    override fun clear() {
-        _tapState.update { null }
-        _focusedMarker.value = null
+    override fun changeFocusedMarker(focusedMarker: MarkerDescriptor?) {
+        _focusedMarkerFlow.update { focusedMarker }
     }
 }

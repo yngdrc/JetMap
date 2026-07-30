@@ -1,23 +1,20 @@
 package app.aventurine.jetmapdemo.di
 
-import app.aventurine.jetmapdemo.data.models.marker.MarkerDao
-import app.aventurine.jetmapdemo.data.models.marker.MarkerRepository
-import app.aventurine.jetmapdemo.data.models.marker.MarkerRepositoryImpl
+import app.aventurine.jetmap.data.repositories.LadderRepositoryImpl
+import app.aventurine.jetmap.data.repositories.MarkerRepositoryImpl
+import app.aventurine.jetmap.domain.repositories.LadderRepository
+import app.aventurine.jetmap.domain.repositories.MarkerRepository
+import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 
 @Module
 @InstallIn(SingletonComponent::class)
-object RepositoryModule {
+abstract class RepositoryModule {
+    @Binds
+    abstract fun bindMarkerRepository(markerRepositoryImpl: MarkerRepositoryImpl): MarkerRepository
 
-    @Provides
-    fun provideMarkerRepository(
-        markerDao: MarkerDao,
-    ): MarkerRepository {
-        return MarkerRepositoryImpl(
-            markerDao = markerDao,
-        )
-    }
+    @Binds
+    abstract fun bindLadderRepository(ladderRepositoryImpl: LadderRepositoryImpl): LadderRepository
 }

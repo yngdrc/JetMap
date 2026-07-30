@@ -2,7 +2,6 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
-    id("kotlin-parcelize")
     alias(libs.plugins.hilt.android.gradle.plugin)
 }
 
@@ -12,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "app.aventurine.jetmap"
-        minSdk = 23
+        minSdk = 24
         versionCode = 1
         versionName = "1.0"
 
@@ -29,8 +28,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
@@ -54,15 +53,18 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-    implementation(project(":jetmap"))
+
+    implementation(project(":data"))
+
+    // OkHttp
+    implementation(libs.okhttp.logging.interceptor)
 
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-    implementation(libs.hilt.navigation.compose)
 
     // Room
     implementation(libs.room.runtime)
-    ksp(libs.room.compiler)
     implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
 }

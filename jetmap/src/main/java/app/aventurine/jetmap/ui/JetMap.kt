@@ -1,19 +1,15 @@
 package app.aventurine.jetmap.ui
 
+import android.graphics.Paint
+import android.graphics.Path
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SmallFloatingActionButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
@@ -26,78 +22,116 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.aventurine.jetmap.provider.MarkerProvider
-import app.aventurine.jetmap.provider.TileProvider
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.dp
+import app.aventurine.jetmap.controller.JetMapController
+import app.aventurine.jetmap.controller.path.PathState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JetMap(
     modifier: Modifier = Modifier,
-    jetMapState: JetMapState,
-    @DrawableRes myLocationResId: Int
+    jetMapController: JetMapController,
+    @DrawableRes myLocationResId: Int,
+    backgroundColorSelector: (Int) -> Color = { Color.White }
 ) {
     SubcomposeLayout(
-        modifier = modifier
-            .fillMaxSize()
+        modifier = modifier.fillMaxSize()
     ) { constraints ->
         val canvasSize = IntSize(width = constraints.maxWidth, height = constraints.maxHeight)
-        jetMapState.initialize(canvasSize = canvasSize)
+        jetMapController.initialize(canvasSize = canvasSize)
 
-        val canvasPlaceables = subcompose(slotId = JetMapState::class.java.name) {
-            val motionState by jetMapState.motionController.motionState.collectAsStateWithLifecycle()
-            val tileState by jetMapState.tileController.tileState.collectAsStateWithLifecycle()
-            val markerState by jetMapState.markerController.markerState.collectAsStateWithLifecycle()
-            val focusedMarkerState by jetMapState.gestureController.focusedMarker
+        val canvasPlaceables = subcompose(slotId = JetMapController::class.java.name) {
+            val motionState by jetMapController.motionController.motionStateFlow
+                .collectAsStateWithLifecycle()
+
+            val tileState by jetMapController.tileController.tileStateFlow
+                .collectAsStateWithLifecycle()
+
+            val markerState by jetMapController.markerController.markerStateFlow
+                .collectAsStateWithLifecycle()
+
+            val pathState by jetMapController.pathController.pathStateFlow
+                .collectAsStateWithLifecycle(initialValue = null)
+
+            val level by jetMapController.motionController.levelStateFlow
+                .collectAsStateWithLifecycle()
+
+            val focusedMarker by jetMapController.gestureController.focusedMarkerFlow
+                .collectAsStateWithLifecycle()
+
+            val uiState by jetMapController.uiController.uiState
             val pinBitmap = ImageBitmap.imageResource(id = myLocationResId).asAndroidBitmap()
 
             JetMapCanvas(
-                modifier = Modifier.pointerInput(Unit) {
+                modifier = modifier.pointerInput(Unit) {
                     detectTapGestures(
                         onTap = { offset ->
-                            jetMapState.gestureController.onTap(
+                            jetMapController.gestureController.onTap(
+                                tapArea = 11.toDp().toPx() / 2,
                                 offset = offset,
-                                motionState = motionState
+                                motionState = motionState,
+                                level = level
                             )
                         }
                     )
                 },
-                onGesture = jetMapState.motionController::onGesture,
-                transformBlock = jetMapState.motionController.transformCanvas(
+                onGesture = jetMapController.motionController::onGesture,
+                backgroundColor = backgroundColorSelector(level),
+                transformBlock = jetMapController.motionController.transformCanvas(
                     motionState = motionState
                 )
             ) {
                 drawIntoCanvas { canvas ->
-                    jetMapState.tileController.draw(
+                    jetMapController.tileController.draw(
                         tiles = tileState,
                         canvas = canvas
                     )
                 }
 
-                drawIntoCanvas { canvas ->
-                    jetMapState.markerController.draw(
-                        markers = markerState,
-                        motionState = motionState,
-                        focusedMarkerState = focusedMarkerState,
-                        canvas = canvas,
-                    )
-                }
+                pathState?.let { pathState ->
+                    if (pathState !is PathState.RouteFound) {
+                        return@let
+                    }
 
-                focusedMarkerState?.let { marker ->
-                    if (marker.third) return@JetMapCanvas
                     drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.drawBitmap(
-                            pinBitmap,
-                            marker.first.x - pinBitmap.width,
-                            marker.first.y - pinBitmap.height,
-                            null
+                        val segments = pathState.pathData[level] ?: return@drawIntoCanvas
+                        val path = Path().apply {
+                            // Każdy segment rysowany osobno — piętro może mieć wiele segmentów (np. most)
+                            segments.forEach { segment ->
+                                segment.forEachIndexed { index, offset ->
+                                    val previous = segment.getOrNull(index - 1) ?: return@forEachIndexed
+                                    moveTo(previous.x.toFloat(), previous.y.toFloat())
+                                    lineTo(offset.x.toFloat(), offset.y.toFloat())
+                                }
+                            }
+                        }
+
+                        canvas.nativeCanvas.drawPath(
+                            path,
+                            Paint().apply {
+                                style = Paint.Style.STROKE
+                                color = android.graphics.Color.WHITE
+                                strokeWidth = 1f
+                            }
                         )
                     }
+                }
+
+                drawIntoCanvas { canvas ->
+                    jetMapController.markerController.draw(
+                        markers = markerState,
+                        focusedMarker = focusedMarker,
+                        level = level,
+                        pinBitmap = pinBitmap,
+                        canvas = canvas,
+                        showMarkers = uiState.showMarkers
+                    )
                 }
             }
         }.map { measurable ->
@@ -115,6 +149,7 @@ fun JetMap(
 @Composable
 fun JetMapCanvas(
     modifier: Modifier,
+    backgroundColor: Color,
     onGesture: (Offset, Offset, Float, Float) -> Unit,
     transformBlock: DrawTransform.() -> Unit,
     drawBlock: DrawScope.() -> Unit
@@ -122,7 +157,7 @@ fun JetMapCanvas(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .background(color = Color.White)
+            .background(color = backgroundColor)
             .clipToBounds()
             .pointerInput(key1 = Unit) {
                 detectTransformGestures(

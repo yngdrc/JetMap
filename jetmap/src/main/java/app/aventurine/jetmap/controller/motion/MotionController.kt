@@ -1,69 +1,72 @@
 package app.aventurine.jetmap.controller.motion
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.lerp
 import androidx.compose.ui.graphics.drawscope.DrawTransform
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.platform.AndroidUiDispatcher
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.unit.center
+import androidx.compose.ui.unit.toOffset
+import androidx.compose.ui.util.lerp
 import app.aventurine.jetmap.ui.JetMapConfig
+import app.aventurine.jetmap.utils.calculateInitialCentroid
+import app.aventurine.jetmap.utils.calculateInitialZoom
+import app.aventurine.jetmap.utils.getVisibleArea
 import app.aventurine.jetmap.utils.rotateBy
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 internal class MotionController(
     parentScope: CoroutineScope,
-    canvasSize: IntSize,
-    config: JetMapConfig
+    private val canvasSize: IntSize,
+    private val config: JetMapConfig
 ) : MotionApi {
-    internal val minZoom: Float
-    internal val maxZoom: Float = config.maxZoom
-    internal val initialCentroid: Offset
+    private val scope: CoroutineScope = CoroutineScope(
+        context = parentScope.coroutineContext + SupervisorJob()
+    )
 
-    init {
-        val canvasSizeBasedZoom = canvasSize.toSize().maxDimension /
-                config.mapSize.toSize().minDimension
+    private val minZoom = calculateInitialZoom(canvasSize = canvasSize, config = config)
 
-        minZoom = canvasSizeBasedZoom.coerceIn(
-            minimumValue = config.minZoom,
-            maximumValue = maxZoom
-        )
-
-        initialCentroid = Offset(
-            x = -canvasSize.width / minZoom / 2f,
-            y = -canvasSize.height / minZoom / 2f
-        ) + Offset(
-            x = config.mapSize.width / 2f,
-            y = config.mapSize.height / 2f
-        )
-    }
-
-    private val _levelState = MutableStateFlow(7)
-    private val _motionState: MutableStateFlow<MotionState> = MutableStateFlow(
-        MotionState(
+    private val _motionStateFlow: MutableStateFlow<MotionState> = MutableStateFlow(
+        value = MotionState(
             zoom = minZoom,
             rotation = 0f,
-            centroid = initialCentroid
+            centroid = calculateInitialCentroid(
+                canvasSize = canvasSize,
+                minZoom = minZoom,
+                mapSize = config.mapSize
+            )
         )
     )
 
-    override val levelState: StateFlow<Int> = _levelState.asStateFlow()
-    override val motionState: StateFlow<MotionState> = _motionState.asStateFlow()
+    override val motionStateFlow: StateFlow<MotionState> = _motionStateFlow.asStateFlow()
 
-    override val visibleAreaFlow: Flow<VisibleArea> = _motionState.map { motionState ->
+    override val visibleAreaFlow: Flow<VisibleArea> = _motionStateFlow.map { motionState ->
         motionState.getVisibleArea(
             canvasSize = canvasSize,
             tileSize = config.tileSize
         )
-    }.distinctUntilChanged().flowOn(Dispatchers.Default)
+    }.distinctUntilChanged()
+
+    private val _levelStateFlow = MutableStateFlow(value = 7)
+    override val levelStateFlow: StateFlow<Int> = _levelStateFlow.asStateFlow()
+    override fun changeLevel(level: Int) = _levelStateFlow.update { level }
+
+    private var moveJob: Job? = null
 
     internal fun onGesture(
         centroid: Offset,
@@ -71,8 +74,13 @@ internal class MotionController(
         zoom: Float,
         rotation: Float
     ) {
-        _motionState.update { motionState ->
-            val newZoom = (motionState.zoom * zoom).coerceIn(minZoom, maxZoom)
+        moveJob?.cancel()
+        _motionStateFlow.update { motionState ->
+            val newZoom = (motionState.zoom * zoom).coerceIn(
+                minimumValue = minZoom,
+                maximumValue = config.maxZoom
+            )
+
             val newCentroid = (motionState.centroid + centroid / motionState.zoom).rotateBy(
                 angle = rotation
             ) - (centroid / newZoom + pan / motionState.zoom)
@@ -82,14 +90,6 @@ internal class MotionController(
                 rotation = motionState.rotation + rotation,
                 centroid = newCentroid
             )
-        }
-    }
-
-    override fun changeLevel(
-        levelUpdateScope: (Int) -> Int
-    ) {
-        _levelState.update { currentLevel ->
-            levelUpdateScope(currentLevel)
         }
     }
 
@@ -103,5 +103,45 @@ internal class MotionController(
 
         scale(scale = motionState.zoom, pivot = Offset.Zero)
         rotate(degrees = motionState.rotation, pivot = Offset.Zero)
+    }
+
+    override fun moveTo(offset: Offset, level: Int, zoom: Float?) {
+        val state = _motionStateFlow.value
+        val targetZoom = (zoom ?: state.zoom).coerceIn(minZoom, config.maxZoom)
+        val startZoom = state.zoom
+        val canvasCenter = canvasSize.center.toOffset()
+        val startMapCenter = (state.centroid + canvasCenter / startZoom).rotateBy(-state.rotation)
+
+        moveJob?.cancel()
+        moveJob = scope.launch {
+            _levelStateFlow.update { level }
+            withContext(AndroidUiDispatcher.Main) {
+                Animatable(initialValue = 0f).animateTo(
+                    targetValue = 1f,
+                    animationSpec = spring(stiffness = Spring.StiffnessVeryLow)
+                ) {
+                    val currentZoom = lerp(
+                        start = startZoom,
+                        stop = targetZoom,
+                        fraction = value
+                    ).coerceIn(minZoom, config.maxZoom)
+
+                    val currentMapCenter = lerp(
+                        start = startMapCenter,
+                        stop = offset,
+                        fraction = value
+                    )
+
+                    _motionStateFlow.update { motionState ->
+                        motionState.copy(
+                            zoom = currentZoom,
+                            centroid = currentMapCenter.rotateBy(
+                                angle = state.rotation
+                            ) - canvasCenter / currentZoom
+                        )
+                    }
+                }
+            }
+        }
     }
 }

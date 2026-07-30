@@ -1,11 +1,10 @@
 package app.aventurine.jetmap.controller.gesture
 
 import androidx.compose.runtime.State
-import androidx.compose.ui.geometry.Offset
+import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
 import kotlinx.coroutines.flow.StateFlow
 
 interface GestureApi {
-    val tapState: StateFlow<Offset?>
-    val focusedMarker: State<FocusedMarker?>
-    fun clear()
+    val focusedMarkerFlow: StateFlow<MarkerDescriptor?>
+    fun changeFocusedMarker(focusedMarker: MarkerDescriptor?)
 }
