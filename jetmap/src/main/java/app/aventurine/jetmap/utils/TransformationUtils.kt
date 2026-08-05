@@ -3,6 +3,7 @@ package app.aventurine.jetmap.utils
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Matrix
+import app.aventurine.jetmap.controller.motion.MotionState
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -20,3 +21,19 @@ fun Rect.rotateBy(angle: Float): Rect {
     matrix.rotateZ(angle)
     return matrix.map(this)
 }
+
+/**
+ * Single source of truth for the map <-> screen transformation.
+ *
+ * The canvas transform used while drawing is
+ * `translate(-centroid * zoom) -> scale(zoom) -> rotate(rotation)`,
+ * which is equivalent to `screen = (rotate(map, rotation) - centroid) * zoom`.
+ */
+fun MotionState.mapToScreen(mapOffset: Offset): Offset =
+    (mapOffset.rotateBy(angle = rotation) - centroid) * zoom
+
+/**
+ * Inverse of [mapToScreen]. Used for hit testing so taps always match what is rendered.
+ */
+fun MotionState.screenToMap(screenOffset: Offset): Offset =
+    (screenOffset / zoom + centroid).rotateBy(angle = -rotation)

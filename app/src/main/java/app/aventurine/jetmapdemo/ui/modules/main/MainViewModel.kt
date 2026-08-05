@@ -1,169 +1,264 @@
 package app.aventurine.jetmapdemo.ui.modules.main
 
-import android.content.Context
-import android.content.res.Resources
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.aventurine.jetmap.controller.JetMapController
-import app.aventurine.jetmapdemo.ui.modules.main.providers.MarkerProviderImpl
-import app.aventurine.jetmapdemo.ui.modules.main.providers.TileProviderImpl
-import app.aventurine.jetmap.domain.fileStorage.FileStorage
+import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
+import app.aventurine.jetmap.controller.navigation.NavigationState
 import app.aventurine.jetmap.domain.models.MapConfigEntity
 import app.aventurine.jetmap.domain.models.MarkerEntity
-import app.aventurine.jetmap.domain.repositories.LadderRepository
 import app.aventurine.jetmap.domain.repositories.MarkerRepository
-import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.ui.JetMapConfig
-import app.aventurine.jetmap.utils.gestureApi
-import app.aventurine.jetmap.utils.pathApi
-import app.aventurine.jetmapdemo.ui.modules.main.providers.PathProviderImpl
+import app.aventurine.jetmapdemo.R
+import app.aventurine.jetmapdemo.ui.modules.main.providers.MapProvidersFactory
 import app.aventurine.jetmapdemo.ui.modules.main.states.MainBottomSheetUIState
-import app.aventurine.jetmapdemo.utils.AStarPathFinder
-import app.aventurine.jetmapdemo.utils.MinimapStitcher
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
-@OptIn(FlowPreview::class)
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    @param:ApplicationContext private val context: Context,
-    private val resources: Resources,
     private val markerRepository: MarkerRepository,
-    private val ladderRepository: LadderRepository,
-    private val fileStorage: FileStorage,
+    providersFactory: MapProvidersFactory,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-    private val mapConfig: MapConfigEntity = savedStateHandle.get<MapConfigEntity>(
-        key = "mapConfig"
-    ) ?: throw IllegalArgumentException("MapConfig must be provided in SavedStateHandle")
 
-    private val _bottomSheetUIState: MutableState<MainBottomSheetUIState> =
-        mutableStateOf(value = MainBottomSheetUIState.Initial)
+    private val mapConfig: MapConfigEntity? = savedStateHandle[MAP_CONFIG_KEY]
 
-    val bottomSheetUIState: State<MainBottomSheetUIState> = _bottomSheetUIState
-    fun setBottomSheetUIState(uiState: MainBottomSheetUIState) {
-        _bottomSheetUIState.value = uiState
+    private val _errorStateFlow: MutableStateFlow<String?> = MutableStateFlow(value = null)
+    val errorStateFlow: StateFlow<String?> = _errorStateFlow.asStateFlow()
+
+    private val providers = mapConfig?.let(providersFactory::create)
+
+    val jetMapController: JetMapController? = mapConfig?.let { config ->
+        providers?.let { mapProviders ->
+            JetMapController(
+                parentScope = viewModelScope,
+                tileProvider = mapProviders.tileProvider,
+                markerProvider = mapProviders.markerProvider,
+                pathProvider = mapProviders.pathProvider,
+                config = JetMapConfig(
+                    tileSize = config.tileSize,
+                    mapSize = IntSize(width = config.width, height = config.height),
+                    initialLevel = config.baseFloor
+                )
+            )
+        }
     }
+
+    private val _bottomSheetUIStateFlow: MutableStateFlow<MainBottomSheetUIState> =
+        MutableStateFlow(value = MainBottomSheetUIState.Initial)
+
+    val bottomSheetUIStateFlow: StateFlow<MainBottomSheetUIState> =
+        _bottomSheetUIStateFlow.asStateFlow()
+
+    val navigationStateFlow: StateFlow<NavigationState> =
+        jetMapController?.navigationApi?.navigationStateFlow
+            ?: MutableStateFlow(NavigationState.Idle)
 
     private val _queryStateFlow: MutableStateFlow<String> = MutableStateFlow(value = "")
     val queryStateFlow: StateFlow<String> = _queryStateFlow.asStateFlow()
     fun onQueryChange(query: String) = _queryStateFlow.update { query }
 
+    /**
+     * `flatMapLatest` cancels the in-flight query, `catch` keeps the flow alive when the
+     * repository throws. Previously a single failure killed the whole search for good.
+     */
     val searchResultsFlow: StateFlow<List<MarkerEntity>> = queryStateFlow
-        .debounce(300.milliseconds)
-        .map { query -> markerRepository.search(query = query) }
+        .debounce(SEARCH_DEBOUNCE)
+        .flatMapLatest { query ->
+            flow {
+                emit(
+                    if (query.isBlank()) {
+                        emptyList()
+                    } else {
+                        markerRepository.search(query = query)
+                    }
+                )
+            }.catch { emit(emptyList()) }
+        }
         .flowOn(context = Dispatchers.IO)
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Lazily,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT),
             initialValue = emptyList()
         )
 
-    val markerProvider: MarkerProvider = MarkerProviderImpl(
-        markerRepository = markerRepository,
-        resources = resources
-    )
-
-    val tileProvider = TileProviderImpl(
-        fileStorage = fileStorage,
-        mapConfig = mapConfig
-    )
-
-    val pathProvider = PathProviderImpl(
-        pathFinder = AStarPathFinder(),
-        mapStitcher = MinimapStitcher(
-            context = context,
-            mapConfig = mapConfig
-        ),
-        ladderRepository = ladderRepository
-    )
-
-    val jetMapController = JetMapController(
-        parentScope = viewModelScope,
-        tileProvider = tileProvider,
-        markerProvider = markerProvider,
-        pathProvider = pathProvider,
-        config = JetMapConfig(
-            tileSize = mapConfig.tileSize,
-            mapSize = IntSize(
-                width = mapConfig.width,
-                height = mapConfig.height
-            ),
-        ),
-    )
-
     init {
-        viewModelScope.launch {
-            jetMapController.gestureApi.focusedMarkerFlow
-                .collectLatest { markerDescriptor ->
-                    jetMapController.pathApi.clear()
-
-                    when (val currentBottomSheetUIState = bottomSheetUIState.value) {
-                        is MainBottomSheetUIState.Initial -> {
-                            if (markerDescriptor == null) {
-                                return@collectLatest
-                            }
-
-                            val newBottomSheetUIState = MainBottomSheetUIState.MarkerDetails(
-                                markerDescriptor = markerDescriptor
-                            )
-
-                            setBottomSheetUIState(uiState = newBottomSheetUIState)
-                        }
-
-                        is MainBottomSheetUIState.MarkerDetails -> {
-                            val newBottomSheetUIState = markerDescriptor
-                                ?.let(currentBottomSheetUIState::copy)
-                                ?: MainBottomSheetUIState.Initial
-
-                            setBottomSheetUIState(uiState = newBottomSheetUIState)
-                        }
-
-                        is MainBottomSheetUIState.Navigation -> {
-                            val newBottomSheetUIState = currentBottomSheetUIState.copy(
-                                startMarkerDescriptor = markerDescriptor
-                            )
-
-                            setBottomSheetUIState(uiState = newBottomSheetUIState)
-                            if (newBottomSheetUIState.startMarkerDescriptor == null) {
-                                return@collectLatest
-                            }
-
-                            jetMapController.pathApi.findPath(
-                                startingPoint = IntOffset(
-                                    x = newBottomSheetUIState.startMarkerDescriptor.x,
-                                    y = newBottomSheetUIState.startMarkerDescriptor.y
-                                ) to newBottomSheetUIState.startMarkerDescriptor.z,
-                                endingPoint = IntOffset(
-                                    x = newBottomSheetUIState.endMarkerDescriptor.x,
-                                    y = newBottomSheetUIState.endMarkerDescriptor.y
-                                ) to newBottomSheetUIState.endMarkerDescriptor.z
-                            )
-                        }
-                    }
-                }
+        if (mapConfig == null) {
+            _errorStateFlow.value = "Brak konfiguracji mapy"
         }
+
+        observeFocusedMarker()
+        observeMapTaps()
+    }
+
+    private fun observeFocusedMarker() {
+        val controller = jetMapController ?: return
+
+        viewModelScope.launch {
+            controller.gestureApi.focusedMarkerFlow.collectLatest { markerDescriptor ->
+                // Route planning is driven by [observeMapTaps], which also accepts empty space.
+                if (_bottomSheetUIStateFlow.value is MainBottomSheetUIState.RoutePlanning) {
+                    return@collectLatest
+                }
+
+                _bottomSheetUIStateFlow.value = markerDescriptor
+                    ?.let(MainBottomSheetUIState::MarkerDetails)
+                    ?: MainBottomSheetUIState.Initial
+            }
+        }
+    }
+
+    /**
+     * While planning a route any point of the map can be used as the starting point, exactly like
+     * before: tapping empty space drops an ad-hoc pin instead of being ignored.
+     */
+    private fun observeMapTaps() {
+        val controller = jetMapController ?: return
+
+        viewModelScope.launch {
+            controller.gestureApi.tapResultFlow.collectLatest { tapResult ->
+                val state = _bottomSheetUIStateFlow.value as? MainBottomSheetUIState.RoutePlanning
+                    ?: return@collectLatest
+
+                // Do not move the origin while turn-by-turn guidance is running.
+                if (navigationStateFlow.value is NavigationState.Navigating) {
+                    return@collectLatest
+                }
+
+                val origin = tapResult.marker ?: MarkerDescriptor(
+                    x = tapResult.x,
+                    y = tapResult.y,
+                    z = tapResult.level,
+                    iconId = R.drawable.ic_map_player,
+                    description = "${tapResult.x}, ${tapResult.y}"
+                )
+
+                if (origin.id == state.destination.id) {
+                    return@collectLatest
+                }
+
+                setOrigin(origin = origin)
+            }
+        }
+    }
+
+    fun onMarkerSelected(markerEntity: MarkerEntity) {
+        jetMapController?.gestureApi?.changeFocusedMarker(
+            focusedMarker = MarkerDescriptor(
+                x = markerEntity.x,
+                y = markerEntity.y,
+                z = markerEntity.floor,
+                iconId = null,
+                description = markerEntity.description
+            )
+        )
+    }
+
+    /** "Nawiguj" on the marker details sheet. */
+    fun startRoutePlanning() {
+        val marker = (_bottomSheetUIStateFlow.value as? MainBottomSheetUIState.MarkerDetails)
+            ?.markerDescriptor ?: return
+
+        _bottomSheetUIStateFlow.value = MainBottomSheetUIState.RoutePlanning(
+            origin = null,
+            destination = marker
+        )
+    }
+
+    fun setOrigin(origin: MarkerDescriptor) {
+        val state = _bottomSheetUIStateFlow.value as? MainBottomSheetUIState.RoutePlanning ?: return
+        _bottomSheetUIStateFlow.value = state.copy(origin = origin)
+        requestRoute()
+    }
+
+    fun swapEndpoints() {
+        val state = _bottomSheetUIStateFlow.value as? MainBottomSheetUIState.RoutePlanning ?: return
+        val origin = state.origin ?: return
+
+        _bottomSheetUIStateFlow.value = state.copy(
+            origin = state.destination,
+            destination = origin
+        )
+        requestRoute()
+    }
+
+    private fun requestRoute() {
+        val state = _bottomSheetUIStateFlow.value as? MainBottomSheetUIState.RoutePlanning ?: return
+        val origin = state.origin ?: return
+        val controller = jetMapController ?: return
+
+        if (origin.id == state.destination.id) {
+            return
+        }
+
+        controller.navigationApi.findRoute(
+            startingPoint = IntOffset(x = origin.x, y = origin.y) to origin.z,
+            endingPoint = IntOffset(
+                x = state.destination.x,
+                y = state.destination.y
+            ) to state.destination.z
+        )
+    }
+
+    fun startNavigation() = jetMapController?.navigationApi?.startNavigation()
+
+    fun stopNavigation() {
+        jetMapController?.navigationApi?.stopNavigation()
+        _bottomSheetUIStateFlow.value = MainBottomSheetUIState.Initial
+        jetMapController?.gestureApi?.changeFocusedMarker(focusedMarker = null)
+    }
+
+    fun showRouteOverview() = jetMapController?.navigationApi?.showOverview()
+
+    fun recenter() = jetMapController?.navigationApi?.recenter()
+
+    fun focusStep(stepIndex: Int) = jetMapController?.navigationApi?.focusStep(stepIndex)
+
+    fun setViewportPadding(left: Float, top: Float, right: Float, bottom: Float) {
+        jetMapController?.navigationApi?.setViewportPadding(left, top, right, bottom)
+    }
+
+    /** Feeds the guidance engine with the current user position. */
+    fun updateUserPosition(x: Float, y: Float, level: Int) {
+        jetMapController?.navigationApi?.updatePosition(x = x, y = y, level = level)
+    }
+
+    fun closeBottomSheet() {
+        jetMapController?.gestureApi?.changeFocusedMarker(focusedMarker = null)
+        jetMapController?.navigationApi?.stopNavigation()
+        _bottomSheetUIStateFlow.value = MainBottomSheetUIState.Initial
+    }
+
+    override fun onCleared() {
+        jetMapController?.dispose()
+        super.onCleared()
+    }
+
+    private companion object {
+        const val MAP_CONFIG_KEY = "mapConfig"
+        const val STOP_TIMEOUT = 5_000L
+        val SEARCH_DEBOUNCE = 300.milliseconds
     }
 }

@@ -7,15 +7,31 @@ import androidx.compose.ui.unit.toSize
 import app.aventurine.jetmap.controller.motion.MotionState
 import app.aventurine.jetmap.controller.motion.VisibleArea
 import app.aventurine.jetmap.ui.JetMapConfig
+import kotlin.math.max
 
+/**
+ * "Cover" zoom: the smallest zoom at which the map still fills the whole canvas.
+ * Using max(...) instead of an aspect-ratio guess keeps the viewport clamped to the map bounds.
+ */
 internal fun calculateInitialZoom(
     canvasSize: IntSize,
     config: JetMapConfig
 ): Float {
-    val canvasSizeBasedZoom = canvasSize.toSize().maxDimension /
-            config.mapSize.toSize().minDimension
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) {
+        return config.minZoom
+    }
 
-    return canvasSizeBasedZoom.coerceIn(
+    val mapSize = config.mapSize
+    if (mapSize.width <= 0 || mapSize.height <= 0) {
+        return config.minZoom
+    }
+
+    val coverZoom = max(
+        canvasSize.width.toFloat() / mapSize.width.toFloat(),
+        canvasSize.height.toFloat() / mapSize.height.toFloat()
+    )
+
+    return coverZoom.coerceIn(
         minimumValue = config.minZoom,
         maximumValue = config.maxZoom
     )
@@ -53,13 +69,14 @@ internal fun MotionState.getVisibleAreaRect(
 
 internal fun MotionState.getVisibleArea(
     canvasSize: IntSize,
-    tileSize: Int
+    tileSize: Int,
+    margin: Int = 0
 ): VisibleArea {
     val visibleAreaRect = getVisibleAreaRect(canvasSize = canvasSize)
-    val startX = visibleAreaRect.left.toInt() / tileSize
-    val endX = visibleAreaRect.right.toInt() / tileSize
-    val startY = visibleAreaRect.top.toInt() / tileSize
-    val endY = visibleAreaRect.bottom.toInt() / tileSize
+    val startX = Math.floorDiv(visibleAreaRect.left.toInt(), tileSize) - margin
+    val endX = Math.floorDiv(visibleAreaRect.right.toInt(), tileSize) + margin
+    val startY = Math.floorDiv(visibleAreaRect.top.toInt(), tileSize) - margin
+    val endY = Math.floorDiv(visibleAreaRect.bottom.toInt(), tileSize) + margin
 
     return VisibleArea(
         left = startX,

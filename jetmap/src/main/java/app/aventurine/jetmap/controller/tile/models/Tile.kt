@@ -1,7 +1,6 @@
 package app.aventurine.jetmap.controller.tile.models
 
 import android.graphics.Bitmap
-import app.aventurine.jetmap.controller.motion.VisibleArea
 import app.aventurine.jetmap.controller.tile.TerrainType
 
 data class Tile(
@@ -12,4 +11,6 @@ data class Tile(
     val terrainType: TerrainType
 ) {
     val id: String = "${x}_${y}_${z}"
+    val key: String = "${terrainType.name}_${x}_${y}_${z}"
+    val positionKey: String = "${x}_${y}"
 }

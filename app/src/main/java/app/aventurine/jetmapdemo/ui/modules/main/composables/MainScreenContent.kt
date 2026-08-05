@@ -1,72 +1,92 @@
 package app.aventurine.jetmapdemo.ui.modules.main.composables
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.BottomSheetScaffoldState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.aventurine.jetmap.controller.JetMapController
-import app.aventurine.jetmap.controller.marker.models.MarkerDescriptor
-import app.aventurine.jetmap.controller.path.PathState
+import app.aventurine.jetmap.controller.motion.CameraMode
+import app.aventurine.jetmap.controller.navigation.NavigationState
 import app.aventurine.jetmap.domain.models.MarkerEntity
 import app.aventurine.jetmap.ui.JetMap
-import app.aventurine.jetmap.utils.gestureApi
-import app.aventurine.jetmap.utils.motionApi
-import app.aventurine.jetmap.utils.pathApi
 import app.aventurine.jetmapdemo.R
 import app.aventurine.jetmapdemo.ui.modules.main.composables.bottomSheet.BottomSheetContent
+import app.aventurine.jetmapdemo.ui.modules.main.composables.navigation.ManeuverBanner
 import app.aventurine.jetmapdemo.ui.modules.main.states.MainBottomSheetUIState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenContent(
     mainBottomSheetUIState: MainBottomSheetUIState,
+    navigationState: NavigationState,
     scaffoldState: BottomSheetScaffoldState,
     snackbarHostState: SnackbarHostState,
     jetMapController: JetMapController,
     query: String,
     searchResults: List<MarkerEntity>,
-    onNavigate: () -> Unit,
+    onPlanRoute: () -> Unit,
+    onSwapEndpoints: () -> Unit,
+    onStartNavigation: () -> Unit,
+    onStopNavigation: () -> Unit,
+    onShowOverview: () -> Unit,
+    onRecenter: () -> Unit,
+    onFocusStep: (Int) -> Unit,
     onCloseBottomSheet: () -> Unit,
     onQueryChange: (String) -> Unit,
-    onSearch: (String) -> Unit,
+    onSearchResultTap: (MarkerEntity) -> Unit,
     onToggleMarkers: () -> Unit,
-    onToggleTerrainType: () -> Unit
+    onToggleTerrainType: () -> Unit,
+    onViewportPaddingChanged: (left: Float, top: Float, right: Float, bottom: Float) -> Unit
 ) {
+    val density = LocalDensity.current
+    val insets = WindowInsets.safeDrawing.asPaddingValues()
+
     BottomSheetScaffold(
         modifier = Modifier.fillMaxSize(),
         scaffoldState = scaffoldState,
-        snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState)
-        },
+        sheetPeekHeight = SHEET_PEEK_HEIGHT.dp,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         sheetContent = {
             BottomSheetContent(
                 uiState = mainBottomSheetUIState,
-                onNavigate = onNavigate,
+                navigationState = navigationState,
+                onPlanRoute = onPlanRoute,
+                onSwapEndpoints = onSwapEndpoints,
+                onStartNavigation = onStartNavigation,
+                onStopNavigation = onStopNavigation,
+                onShowOverview = onShowOverview,
+                onFocusStep = onFocusStep,
                 onClose = onCloseBottomSheet
             )
         },
     ) { innerPadding ->
-        Box(
-            modifier = Modifier.fillMaxSize()
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             JetMap(
                 jetMapController = jetMapController,
-                myLocationResId = R.drawable.ic_map_player,
                 backgroundColorSelector = { level ->
                     when (level) {
-                        7 -> Color(red = 51, green = 102, blue = 153)
+                        WATER_LEVEL -> Color(red = 51, green = 102, blue = 153)
                         else -> Color.Black
                     }
                 }
@@ -77,21 +97,31 @@ fun MainScreenContent(
                 return@Box
             }
 
-            val level by jetMapController.motionApi.levelStateFlow.collectAsStateWithLifecycle()
-            val pathState by jetMapController.pathApi.pathStateFlow
-                .collectAsStateWithLifecycle(initialValue = null)
+            val level by jetMapController.motionApi.levelStateFlow
+                .collectAsStateWithLifecycle()
 
-            LaunchedEffect(pathState) {
-                val (message, duration) = when (pathState) {
-                    is PathState.FindingRoute -> "Finding route" to SnackbarDuration.Indefinite
-                    is PathState.RouteNotFound -> "Route not found" to SnackbarDuration.Long
-                    else -> {
-                        snackbarHostState.currentSnackbarData?.dismiss()
-                        return@LaunchedEffect
-                    }
+            val cameraMode by jetMapController.navigationApi.cameraModeFlow
+                .collectAsStateWithLifecycle()
+
+            // The route must be framed inside the part of the screen that is not covered by UI.
+            LaunchedEffect(innerPadding, density) {
+                with(density) {
+                    onViewportPaddingChanged(
+                        0f,
+                        MANEUVER_BANNER_RESERVED_HEIGHT.dp.toPx(),
+                        0f,
+                        (SHEET_PEEK_HEIGHT.dp + insets.calculateBottomPadding()).toPx()
+                    )
                 }
+            }
 
-                snackbarHostState.showSnackbar(message = message, duration = duration)
+            (navigationState as? NavigationState.Navigating)?.let { navigating ->
+                ManeuverBanner(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(all = 16.dp),
+                    state = navigating
+                )
             }
 
             MapOverlay(
@@ -99,29 +129,32 @@ fun MainScreenContent(
                 query = query,
                 searchResults = searchResults,
                 currentLevel = level,
+                showSearch = navigationState !is NavigationState.Navigating,
                 onChangeLevel = jetMapController.motionApi::changeLevel,
                 onToggleMarkers = onToggleMarkers,
                 onToggleTerrainType = onToggleTerrainType,
                 onQueryChange = onQueryChange,
-                onSearch = onSearch,
-                onSearchResultTap = { markerEntity ->
-                    jetMapController.gestureApi.changeFocusedMarker(
-                        focusedMarker = MarkerDescriptor(
-                            x = markerEntity.x,
-                            y = markerEntity.y,
-                            z = markerEntity.floor,
-                            iconId = markerEntity.iconId,
-                            description = markerEntity.description
-                        )
+                onSearchResultTap = onSearchResultTap
+            )
+
+            AnimatedVisibility(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(all = 16.dp),
+                visible = navigationState is NavigationState.Navigating &&
+                        cameraMode == CameraMode.FREE
+            ) {
+                SmallFloatingActionButton(onClick = onRecenter) {
+                    Icon(
+                        painter = painterResource(id = android.R.drawable.ic_menu_mylocation),
+                        contentDescription = "Wyśrodkuj"
                     )
                 }
-            )
+            }
         }
     }
 }
 
-@Preview
-@Composable
-fun MainScreenContentPreview() {
-
-}
+private const val SHEET_PEEK_HEIGHT = 96
+private const val MANEUVER_BANNER_RESERVED_HEIGHT = 120
+private const val WATER_LEVEL = 7

@@ -1,137 +1,249 @@
 package app.aventurine.jetmapdemo.utils
 
-import android.graphics.Bitmap
-import android.graphics.Color
 import androidx.compose.ui.unit.IntOffset
-import androidx.core.graphics.ColorUtils
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.util.PriorityQueue
-import kotlin.math.absoluteValue
+import kotlin.math.abs
 import kotlin.math.min
-import androidx.core.graphics.get
-import androidx.core.graphics.luminance
-import app.aventurine.jetmap.controller.path.BlockType
 
-data class Node(
-    val offset: IntOffset,
-    val g: Int,
-    val h: Int,
-    val parent: Node?
-) {
-    val f: Int
-        get() = g + h
-}
-
+/**
+ * Grid A* over a [CostMap].
+ *
+ * Fixes over the previous version:
+ *  - works on a primitive grid instead of `Bitmap.get` per neighbour,
+ *  - bounds are checked explicitly, not through exceptions,
+ *  - terrain friction and the heuristic use the same scale, so the heuristic actually guides the
+ *    search instead of degenerating into Dijkstra,
+ *  - diagonal moves may not cut corners,
+ *  - the result is "string pulled" (line of sight simplification), which is what makes the drawn
+ *    route look like a map route instead of grid stairs.
+ */
 class AStarPathFinder {
-    suspend fun aStar(
-        start: Node,
+
+    suspend fun findPath(
+        start: IntOffset,
         end: IntOffset,
-        mapBitmap: Bitmap
+        costMap: CostMap,
+        maxIterations: Int = DEFAULT_MAX_ITERATIONS
     ): List<IntOffset> = withContext(Dispatchers.Default) {
-        val open = PriorityQueue<Node>(compareBy { it.f })
-        val openBestG = HashMap<IntOffset, Int>()
-        val closed = HashSet<IntOffset>()
+        if (!costMap.isWalkable(start.x, start.y) || !costMap.isWalkable(end.x, end.y)) {
+            return@withContext emptyList()
+        }
 
-        open.add(start)
-        openBestG[start.offset] = start.g
+        val width = costMap.width
+        val startIndex = start.y * width + start.x
+        val endIndex = end.y * width + end.x
 
-        while (open.isNotEmpty() && isActive) {
-            val current = open.poll()!!
+        if (startIndex == endIndex) {
+            return@withContext listOf(start)
+        }
 
-            if (current.offset == end) {
-                return@withContext generateSequence(current) { it.parent }
-                    .map { it.offset }
-                    .toList()
-                    .reversed()
+        val gScore = HashMap<Int, Int>()
+        val parents = HashMap<Int, Int>()
+        val closed = HashSet<Int>()
+
+        // f in the high 32 bits, cell index in the low ones: ordering for free, no allocation
+        // of a comparator object per node.
+        val open = PriorityQueue<Long>()
+
+        gScore[startIndex] = 0
+        open.add(encode(f = heuristic(start.x, start.y, end.x, end.y), index = startIndex))
+
+        var iterations = 0
+
+        while (open.isNotEmpty()) {
+            if (iterations++ % YIELD_INTERVAL == 0) {
+                coroutineContext.ensureActive()
             }
 
-            if (current.g > (openBestG[current.offset] ?: Int.MAX_VALUE)) continue
+            if (iterations > maxIterations) {
+                return@withContext emptyList()
+            }
 
-            closed.add(current.offset)
+            val currentIndex = decodeIndex(open.poll()!!)
+            if (currentIndex == endIndex) {
+                return@withContext simplify(
+                    path = reconstruct(parents = parents, endIndex = endIndex, width = width),
+                    costMap = costMap
+                )
+            }
 
-            for (neighbor in getNeighbors(current, end, mapBitmap)) {
-                if (neighbor.offset in closed) continue
-                val bestG = openBestG[neighbor.offset] ?: Int.MAX_VALUE
-                if (neighbor.g < bestG) {
-                    openBestG[neighbor.offset] = neighbor.g
-                    open.add(neighbor)
+            if (!closed.add(currentIndex)) {
+                continue
+            }
+
+            val currentX = currentIndex % width
+            val currentY = currentIndex / width
+            val currentG = gScore[currentIndex] ?: continue
+
+            for (direction in 0 until NEIGHBOUR_COUNT) {
+                val neighbourX = currentX + NEIGHBOUR_DX[direction]
+                val neighbourY = currentY + NEIGHBOUR_DY[direction]
+
+                if (!costMap.isWalkable(neighbourX, neighbourY)) {
+                    continue
                 }
+
+                val isDiagonal = direction >= 4
+                if (isDiagonal && !canCutCorner(costMap, currentX, currentY, neighbourX, neighbourY)) {
+                    continue
+                }
+
+                val neighbourIndex = neighbourY * width + neighbourX
+                if (neighbourIndex in closed) {
+                    continue
+                }
+
+                val stepCost = (if (isDiagonal) DIAGONAL_COST else STRAIGHT_COST) +
+                        costMap.friction(neighbourX, neighbourY)
+
+                val tentativeG = currentG + stepCost
+                if (tentativeG >= (gScore[neighbourIndex] ?: Int.MAX_VALUE)) {
+                    continue
+                }
+
+                gScore[neighbourIndex] = tentativeG
+                parents[neighbourIndex] = currentIndex
+                open.add(
+                    encode(
+                        f = tentativeG + heuristic(neighbourX, neighbourY, end.x, end.y),
+                        index = neighbourIndex
+                    )
+                )
             }
         }
 
         emptyList()
     }
 
-    private fun getNeighbors(node: Node, end: IntOffset, mapBitmap: Bitmap): List<Node> {
-        val x = node.offset.x
-        val y = node.offset.y
+    /** Diagonal moves are only allowed when both adjacent orthogonal cells are free. */
+    private fun canCutCorner(
+        costMap: CostMap,
+        fromX: Int,
+        fromY: Int,
+        toX: Int,
+        toY: Int
+    ): Boolean = costMap.isWalkable(toX, fromY) && costMap.isWalkable(fromX, toY)
 
-        val straight = listOf(
-            IntOffset(x, y - 1),
-            IntOffset(x, y + 1),
-            IntOffset(x - 1, y),
-            IntOffset(x + 1, y),
-        ).mapNotNull { offset ->
-            offset.toNode(mapBitmap = mapBitmap, node = node, end = end, isDiagonal = false)
-        }
-
-        val diagonal = listOf(
-            IntOffset(x - 1, y - 1),
-            IntOffset(x + 1, y - 1),
-            IntOffset(x + 1, y + 1),
-            IntOffset(x - 1, y + 1),
-        ).mapNotNull { offset ->
-            offset.toNode(mapBitmap = mapBitmap, node = node, end = end, isDiagonal = true)
-        }
-
-        return straight + diagonal
+    private fun heuristic(x: Int, y: Int, endX: Int, endY: Int): Int {
+        val dx = abs(x - endX)
+        val dy = abs(y - endY)
+        // Octile distance, admissible because the step cost is never below STRAIGHT_COST.
+        return STRAIGHT_COST * (dx + dy) + (DIAGONAL_COST - 2 * STRAIGHT_COST) * min(dx, dy)
     }
 
-    private fun heuristic(a: IntOffset, b: IntOffset): Int {
-        val dx = (a.x - b.x).absoluteValue
-        val dy = (a.y - b.y).absoluteValue
-        return 10 * (dx + dy) - 6 * min(dx, dy)
-    }
+    private fun reconstruct(
+        parents: Map<Int, Int>,
+        endIndex: Int,
+        width: Int
+    ): List<IntOffset> {
+        val path = ArrayList<IntOffset>()
+        var index: Int? = endIndex
 
-    private fun isWalkable(color: Int): Boolean {
-//        val blockType = BlockType.fromColor(color)
-//        return blockType.isWalkable
-
-        return Color.rgb(255, 255, 0) != color
-    }
-
-    private fun IntOffset.toNode(
-        mapBitmap: Bitmap,
-        node: Node,
-        end: IntOffset,
-        isDiagonal: Boolean
-    ): Node? {
-        val pixel = try {
-            mapBitmap[x, y]
-        } catch (e: Exception) {
-            return null
+        while (index != null) {
+            path.add(IntOffset(x = index % width, y = index / width))
+            index = parents[index]
         }
 
-        val r = Color.red(pixel)
-        val g = Color.green(pixel)
-        val b = Color.blue(pixel)
-        val color = Color.rgb(r, g, b)
-        if (!isWalkable(color = color)) {
-            return null
+        path.reverse()
+        return path
+    }
+
+    /**
+     * Removes every point that can be skipped without leaving the walkable area. Turns the raw
+     * grid staircase into a handful of straight segments, but shortcuts are bounded so the line
+     * keeps following the terrain instead of flying across half of the floor.
+     */
+    private fun simplify(path: List<IntOffset>, costMap: CostMap): List<IntOffset> {
+        if (path.size < 3) {
+            return path
         }
 
-        val baseG = node.g + if (isDiagonal) 14 else 10
+        val result = ArrayList<IntOffset>()
+        result.add(path.first())
 
-        // grayscale r = g = b, consider using single channel
-        val frictionG = (ColorUtils.calculateLuminance(color) * 100).toInt()
+        var anchor = 0
+        var probe = 1
 
-        return Node(
-            offset = this,
-            g = baseG + frictionG,
-            h = heuristic(this, end),
-            parent = node
-        )
+        while (probe < path.lastIndex) {
+            val tooLong = probe + 1 - anchor > MAX_SHORTCUT_STEPS
+            if (tooLong || !hasLineOfSight(path[anchor], path[probe + 1], costMap)) {
+                result.add(path[probe])
+                anchor = probe
+            }
+            probe++
+        }
+
+        result.add(path.last())
+        return result
+    }
+
+    /**
+     * Conservative (supercover) Bresenham: a diagonal step is only allowed when both orthogonal
+     * cells around the corner are walkable, and both of them are tested as well.
+     *
+     * The thin classic Bresenham line slipped diagonally between two blocked cells, which is why
+     * the simplified route could cross non walkable tiles.
+     */
+    private fun hasLineOfSight(from: IntOffset, to: IntOffset, costMap: CostMap): Boolean {
+        var x = from.x
+        var y = from.y
+        val dx = abs(to.x - x)
+        val dy = abs(to.y - y)
+        val stepX = if (to.x > x) 1 else -1
+        val stepY = if (to.y > y) 1 else -1
+        var error = dx - dy
+
+        while (true) {
+            if (!costMap.isWalkable(x, y)) {
+                return false
+            }
+
+            if (x == to.x && y == to.y) {
+                return true
+            }
+
+            val doubledError = error shl 1
+            val moveX = doubledError > -dy
+            val moveY = doubledError < dx
+
+            if (moveX && moveY) {
+                // Diagonal step: both shoulder cells must be free, otherwise the line would cut
+                // through the corner of an obstacle.
+                if (!costMap.isWalkable(x + stepX, y) || !costMap.isWalkable(x, y + stepY)) {
+                    return false
+                }
+            }
+
+            if (moveX) {
+                error -= dy
+                x += stepX
+            }
+            if (moveY) {
+                error += dx
+                y += stepY
+            }
+        }
+    }
+
+    private fun encode(f: Int, index: Int): Long =
+        (f.toLong() shl 32) or (index.toLong() and 0xFFFFFFFFL)
+
+    private fun decodeIndex(value: Long): Int = (value and 0xFFFFFFFFL).toInt()
+
+    private companion object {
+        const val STRAIGHT_COST = 10
+        const val DIAGONAL_COST = 14
+        const val NEIGHBOUR_COUNT = 8
+        const val YIELD_INTERVAL = 512
+        const val DEFAULT_MAX_ITERATIONS = 2_000_000
+
+        /** Upper bound of a line-of-sight shortcut, in grid steps. */
+        const val MAX_SHORTCUT_STEPS = 48
+
+        val NEIGHBOUR_DX = intArrayOf(0, 0, -1, 1, -1, 1, -1, 1)
+        val NEIGHBOUR_DY = intArrayOf(-1, 1, 0, 0, -1, -1, 1, 1)
     }
 }

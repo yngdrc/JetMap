@@ -45,11 +45,11 @@ fun MapOverlay(
     query: String,
     searchResults: List<MarkerEntity>,
     currentLevel: Int,
+    showSearch: Boolean = true,
     onChangeLevel: (Int) -> Unit,
     onToggleMarkers: () -> Unit,
     onToggleTerrainType: () -> Unit,
     onQueryChange: (String) -> Unit,
-    onSearch: (String) -> Unit,
     onSearchResultTap: (MarkerEntity) -> Unit
 ) {
     val paddingValues = WindowInsets.safeDrawing.asPaddingValues()
@@ -59,71 +59,74 @@ fun MapOverlay(
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        SearchBar(
-            modifier = Modifier.align(Alignment.TopCenter),
-            inputField = {
-                SearchBarDefaults.InputField(
-                    query = query,
-                    onQueryChange = onQueryChange,
-                    onSearch = onSearch,
-                    expanded = expanded,
-                    onExpandedChange = { expanded = it },
-                    trailingIcon = {
-                        if (query.isNotEmpty() || expanded) {
-                            IconButton(
-                                onClick = {
-                                    expanded = false
-                                }
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_close),
-                                    contentDescription = "Close"
-                                )
-                            }
-                        }
-                    },
-                    placeholder = {
-                        Text(text = "Search...")
-                    }
-                )
-            },
-            expanded = expanded,
-            onExpandedChange = { expanded = it }
-        ) {
-            LazyColumn {
-                items(searchResults) { searchResult ->
-                    ListItem(
-                        modifier = Modifier.pointerInput(searchResult) {
-                            detectTapGestures(
-                                onTap = {
-                                    onSearchResultTap(searchResult)
-                                    expanded = false
-                                }
-                            )
-                        },
-                        headlineContent = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                    getIconDrawableRes(iconId = searchResult.iconId)
-                                    ?.let { iconDrawableRes ->
+        if (showSearch) {
+            SearchBar(
+                modifier = Modifier.align(Alignment.TopCenter),
+                inputField = {
+                    SearchBarDefaults.InputField(
+                        query = query,
+                        onQueryChange = onQueryChange,
+                        onSearch = { expanded = false },
+                        expanded = expanded,
+                        onExpandedChange = { expanded = it },
+                        trailingIcon = {
+                            if (query.isNotEmpty() || expanded) {
+                                IconButton(
+                                    onClick = {
+                                        expanded = false
+                                        onQueryChange("")
+                                    }
+                                ) {
                                     Icon(
-                                        modifier = Modifier.size(24.dp),
-                                        painter = painterResource(id = iconDrawableRes),
-                                        contentDescription = "Marker",
-                                        tint = null
+                                        painter = painterResource(R.drawable.ic_close),
+                                        contentDescription = "Wyczyść"
                                     )
                                 }
-
-                                Text(
-                                    text = searchResult.description.ifEmpty {
-                                        "${searchResult.x}, ${searchResult.y}"
-                                    }
-                                )
                             }
+                        },
+                        placeholder = {
+                            Text(text = "Szukaj...")
                         }
                     )
+                },
+                expanded = expanded,
+                onExpandedChange = { expanded = it }
+            ) {
+                LazyColumn {
+                    items(searchResults) { searchResult ->
+                        ListItem(
+                            modifier = Modifier.pointerInput(searchResult) {
+                                detectTapGestures(
+                                    onTap = {
+                                        onSearchResultTap(searchResult)
+                                        expanded = false
+                                    }
+                                )
+                            },
+                            headlineContent = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    getIconDrawableRes(iconId = searchResult.iconId)
+                                        ?.let { iconDrawableRes ->
+                                            Icon(
+                                                modifier = Modifier.size(24.dp),
+                                                painter = painterResource(id = iconDrawableRes),
+                                                contentDescription = "Marker",
+                                                tint = null
+                                            )
+                                        }
+
+                                    Text(
+                                        text = searchResult.description.ifEmpty {
+                                            "${searchResult.x}, ${searchResult.y}"
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -192,7 +195,6 @@ fun MapOverlayPreview() {
         searchResults = emptyList(),
         onChangeLevel = {},
         onQueryChange = {},
-        onSearch = {},
         onSearchResultTap = {},
         onToggleMarkers = {},
         onToggleTerrainType = {}

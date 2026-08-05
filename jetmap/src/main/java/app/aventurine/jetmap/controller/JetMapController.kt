@@ -3,13 +3,17 @@ package app.aventurine.jetmap.controller
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntSize
+import app.aventurine.jetmap.controller.gesture.GestureApi
 import app.aventurine.jetmap.controller.gesture.GestureController
 import app.aventurine.jetmap.controller.marker.MarkerController
+import app.aventurine.jetmap.controller.motion.MotionApi
 import app.aventurine.jetmap.controller.motion.MotionController
-import app.aventurine.jetmap.controller.path.PathController
+import app.aventurine.jetmap.controller.navigation.NavigationApi
+import app.aventurine.jetmap.controller.navigation.NavigationController
+import app.aventurine.jetmap.controller.tile.TileApi
 import app.aventurine.jetmap.controller.tile.TileController
+import app.aventurine.jetmap.controller.ui.UIApi
 import app.aventurine.jetmap.controller.ui.UIController
 import app.aventurine.jetmap.provider.MarkerProvider
 import app.aventurine.jetmap.provider.PathProvider
@@ -21,15 +25,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.plus
 import kotlin.time.Duration.Companion.milliseconds
 
+/**
+ * Owns every sub controller and wires them together.
+ *
+ * The controller is created once and survives re-measures: the canvas size is pushed in through
+ * [onCanvasSizeChanged] instead of recreating controllers, which previously reset the viewport and
+ * leaked one collector per measure pass.
+ */
 @OptIn(FlowPreview::class)
 class JetMapController(
     parentScope: CoroutineScope,
@@ -39,52 +48,69 @@ class JetMapController(
     val config: JetMapConfig,
 ) {
     private val scope = CoroutineScope(
-        context = parentScope.coroutineContext + SupervisorJob() + Dispatchers.Main
+        context = parentScope.coroutineContext + SupervisorJob() + Dispatchers.Main.immediate
     )
 
-    internal lateinit var motionController: MotionController
+    internal val motionController: MotionController = MotionController(
+        parentScope = scope,
+        config = config
+    )
 
     internal val tileController: TileController = TileController(
-        parentScope = scope,
         tileProvider = tileProvider,
         config = config
     )
 
     internal val markerController: MarkerController = MarkerController(
-        parentScope = scope,
         markerProvider = markerProvider,
         config = config
     )
 
     internal val gestureController: GestureController = GestureController(
-        parentScope = scope,
         markerProvider = markerProvider
     )
-    internal val pathController: PathController = PathController(
+
+    internal val navigationController: NavigationController = NavigationController(
         parentScope = scope,
-        pathProvider = pathProvider
+        pathProvider = pathProvider,
+        motionController = motionController,
+        config = config
     )
 
     internal val uiController: UIController = UIController()
 
+    /** Public, interface typed facades. No casting, no leaking of the internal controllers. */
+    val motionApi: MotionApi get() = motionController
+    val tileApi: TileApi get() = tileController
+    val gestureApi: GestureApi get() = gestureController
+    val navigationApi: NavigationApi get() = navigationController
+    val uiApi: UIApi get() = uiController
+
     private val _initializationState: MutableState<Boolean> = mutableStateOf(value = false)
     val initializationState: State<Boolean> = _initializationState
 
-    fun initialize(canvasSize: IntSize) {
-        _initializationState.value = false
-        motionController = MotionController(
-            parentScope = scope,
-            canvasSize = canvasSize,
-            config = config,
-        )
-
-        collectStates(canvasSize = canvasSize)
-        _initializationState.value = true
+    init {
+        collectStates()
     }
 
-    private fun collectStates(
-        canvasSize: IntSize
-    ) {
+    /**
+     * Idempotent. Safe to call from every layout pass.
+     */
+    fun onCanvasSizeChanged(canvasSize: IntSize) {
+        motionController.onCanvasSizeChanged(canvasSize = canvasSize)
+        if (canvasSize.width > 0 && canvasSize.height > 0 && !_initializationState.value) {
+            _initializationState.value = true
+        }
+    }
+
+    /**
+     * Cancels every collector and animation. Call it from `ViewModel.onCleared`.
+     */
+    fun dispose() {
+        scope.cancel()
+    }
+
+    private fun collectStates() {
         scope.launch {
             combine(
                 flow = motionController.visibleAreaFlow,
@@ -104,43 +130,24 @@ class JetMapController(
         scope.launch {
             combine(
                 flow = motionController.motionStateFlow.debounce(timeout = 300.milliseconds),
-                flow2 = motionController.levelStateFlow
-            ) { motionState, level ->
-                motionState to level
-            }.buffer(capacity = 0)
-                .collectLatest { (motionState, level) ->
-                    markerController.onVisibleAreaChanged(
-                        visibleAreaRect = motionState.getVisibleAreaRect(canvasSize = canvasSize),
-                        level = level
-                    )
-                }
+                flow2 = motionController.levelStateFlow,
+                flow3 = motionController.canvasSizeFlow
+            ) { motionState, level, canvasSize ->
+                Triple(motionState, level, canvasSize)
+            }.filter { (_, _, canvasSize) ->
+                canvasSize.width > 0 && canvasSize.height > 0
+            }.collectLatest { (motionState, level, canvasSize) ->
+                markerController.onVisibleAreaChanged(
+                    visibleAreaRect = motionState.getVisibleAreaRect(canvasSize = canvasSize),
+                    level = level
+                )
+            }
         }
 
         scope.launch {
-            gestureController.tapFlow
-                .filterNotNull()
-                .collectLatest { (offset, level, tapArea) ->
-                    gestureController.onMarkerFocusChanged(
-                        offset = offset,
-                        level = level,
-                        tapArea = tapArea
-                    )
-                }
+            gestureController.tapFlow.collectLatest { tapEvent ->
+                gestureController.onMarkerFocusChanged(tapEvent = tapEvent)
+            }
         }
-
-//        scope.launch {
-//            gestureController.focusedMarkerFlow
-//                .filterNotNull()
-//                .collectLatest { markerDescriptor ->
-//                    motionController.moveTo(
-//                        offset = Offset(
-//                            x = markerDescriptor.x.toFloat(),
-//                            y = markerDescriptor.y.toFloat()
-//                        ),
-//                        level = markerDescriptor.z,
-//                        zoom = 5f
-//                    )
-//                }
-//        }
     }
 }

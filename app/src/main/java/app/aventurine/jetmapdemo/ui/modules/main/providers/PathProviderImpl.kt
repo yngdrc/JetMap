@@ -1,234 +1,344 @@
 package app.aventurine.jetmapdemo.ui.modules.main.providers
 
-import android.graphics.Bitmap
-import android.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import app.aventurine.jetmap.domain.models.LadderEntity
 import app.aventurine.jetmap.domain.repositories.LadderRepository
 import app.aventurine.jetmap.provider.PathProvider
+import app.aventurine.jetmap.provider.PathSegment
 import app.aventurine.jetmap.ui.JetMapConfig
 import app.aventurine.jetmapdemo.utils.AStarPathFinder
+import app.aventurine.jetmapdemo.utils.CostMap
 import app.aventurine.jetmapdemo.utils.MinimapStitcher
-import app.aventurine.jetmapdemo.utils.Node
-import androidx.core.graphics.get
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.BitSet
 
+/**
+ * Multi floor routing: A* inside a floor, breadth first search over connected ladders between
+ * floors, and a walkable-region index so ladders that are physically unreachable are ignored.
+ */
 class PathProviderImpl(
     private val pathFinder: AStarPathFinder,
     private val mapStitcher: MinimapStitcher,
     private val ladderRepository: LadderRepository
 ) : PathProvider {
 
-    companion object {
-        private val NEIGHBOR_DX = intArrayOf(0, 0, -1, 1, -1, -1, 1, 1)
-        private val NEIGHBOR_DY = intArrayOf(-1, 1, 0, 0, -1, 1, -1, 1)
+    /**
+     * A connected walkable area. [cells] is indexed relative to the bounding box
+     * ([minX], [minY]) - ([maxX], [maxY]) and [width] is the width of that box, so a small room
+     * costs a few bytes instead of a floor sized bit set.
+     */
+    private class Region(
+        val floor: Int,
+        val cells: BitSet,
+        val width: Int,
+        val minX: Int,
+        val minY: Int,
+        val maxX: Int,
+        val maxY: Int
+    ) {
+        fun contains(x: Int, y: Int): Boolean =
+            x in minX..maxX && y in minY..maxY && cells.get((y - minY) * width + (x - minX))
     }
 
-    private data class RegionResult(
-        val bits: BitSet,
-        val bitmapWidth: Int,
-        val minX: Int, val minY: Int,
-        val maxX: Int, val maxY: Int
-    ) {
-        fun contains(x: Int, y: Int): Boolean = bits.get(y * bitmapWidth + x)
-    }
+    // Shared mutable state guarded by a mutex: the previous version mutated a plain HashMap from
+    // several coroutines at once.
+    private val cacheMutex = Mutex()
+    private val costMaps = mutableMapOf<Int, CostMap?>()
+    private val regions = mutableListOf<Region>()
 
     override suspend fun getPath(
         startingPoint: Pair<IntOffset, Int>,
         endingPoint: Pair<IntOffset, Int>
-    ): Map<Int, List<List<IntOffset>>> {
-        val (startOffset, startFloor) = startingPoint
-        val (endOffset, endFloor) = endingPoint
+    ): List<PathSegment> {
+        val (rawStartOffset, startFloor) = startingPoint
+        val (rawEndOffset, endFloor) = endingPoint
 
-        val bitmapCache = mutableMapOf<Int, Bitmap?>()
-        withContext(Dispatchers.IO) {
-            setOf(startFloor, endFloor).forEach { floor ->
-                bitmapCache[floor] = mapStitcher.stitch(floor)
-            }
-        }
+        return try {
+            val startCostMap = costMapOf(startFloor) ?: return emptyList()
+            val endCostMap = costMapOf(endFloor) ?: return emptyList()
 
-        try {
-            val (startLadders, endLadders) = coroutineScope {
-                val startAsync = async { getLaddersInRegion(startOffset, startFloor, bitmapCache) }
-                val endAsync = async { getLaddersInRegion(endOffset, endFloor, bitmapCache) }
-                startAsync.await() to endAsync.await()
-            }
+            // The user may drop a point on a wall or in water; snap it to the closest free cell.
+            val startOffset = startCostMap.snap(rawStartOffset) ?: return emptyList()
+            val endOffset = endCostMap.snap(rawEndOffset) ?: return emptyList()
 
-            if (startLadders.toSet() == endLadders.toSet()) {
-                val bitmap = bitmapCache[startFloor] ?: return emptyMap()
-                return mapOf(
-                    startFloor to listOf(
-                        pathFinder.aStar(
-                            start = Node(offset = startOffset, g = 0, h = 0, parent = null),
-                            end = endOffset,
-                            mapBitmap = bitmap
-                        )
-                    )
+            val startRegion = regionOf(point = startOffset, floor = startFloor)
+                ?: return emptyList()
+
+            // Same floor and same walkable region: a single A* run is enough.
+            if (startFloor == endFloor && startRegion.contains(endOffset.x, endOffset.y)) {
+                return singleSegment(
+                    level = startFloor,
+                    from = startOffset,
+                    to = endOffset,
+                    costMap = startCostMap
                 )
             }
 
-            val route = findRoute(startLadders, endLadders, bitmapCache) ?: return emptyMap()
+            val endRegion = regionOf(point = endOffset, floor = endFloor) ?: return emptyList()
+            val transitions = findLadderRoute(startRegion = startRegion, endRegion = endRegion)
+                ?: return emptyList()
 
-            val result = mutableMapOf<Int, MutableList<List<IntOffset>>>()
-
-            val (firstDeparture, _) = route.first()
-            bitmapCache[startFloor]?.let { bitmap ->
-                result.getOrPut(startFloor) { mutableListOf() }.add(
-                    pathFinder.aStar(
-                        start = Node(offset = startOffset, g = 0, h = 0, parent = null),
-                        end = IntOffset(firstDeparture.x, firstDeparture.y),
-                        mapBitmap = bitmap
-                    )
-                )
-            }
-
-            for (i in 0 until route.size - 1) {
-                val (_, arrival) = route[i]
-                val (nextDeparture, _) = route[i + 1]
-                bitmapCache[arrival.floor]?.let { bitmap ->
-                    result.getOrPut(arrival.floor) { mutableListOf() }.add(
-                        pathFinder.aStar(
-                            start = Node(offset = IntOffset(arrival.x, arrival.y), g = 0, h = 0, parent = null),
-                            end = IntOffset(nextDeparture.x, nextDeparture.y),
-                            mapBitmap = bitmap
-                        )
-                    )
-                }
-            }
-
-            val (_, lastArrival) = route.last()
-            bitmapCache[endFloor]?.let { bitmap ->
-                result.getOrPut(endFloor) { mutableListOf() }.add(
-                    pathFinder.aStar(
-                        start = Node(offset = IntOffset(lastArrival.x, lastArrival.y), g = 0, h = 0, parent = null),
-                        end = endOffset,
-                        mapBitmap = bitmap
-                    )
-                )
-            }
-
-            return result
-        } finally {
-            bitmapCache.values.forEach { it?.recycle() }
+            buildSegments(
+                startOffset = startOffset,
+                startFloor = startFloor,
+                endOffset = endOffset,
+                endFloor = endFloor,
+                endCostMap = endCostMap,
+                startCostMap = startCostMap,
+                transitions = transitions
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 
-    private suspend fun findRoute(
-        startLadders: Collection<LadderEntity>,
-        endLadders: Collection<LadderEntity>,
-        bitmapCache: MutableMap<Int, Bitmap?>
-    ): List<Pair<LadderEntity, LadderEntity>>? {
-        val endSet = endLadders.toSet()
+    private suspend fun buildSegments(
+        startOffset: IntOffset,
+        startFloor: Int,
+        endOffset: IntOffset,
+        endFloor: Int,
+        startCostMap: CostMap,
+        endCostMap: CostMap,
+        transitions: List<Pair<LadderEntity, LadderEntity>>
+    ): List<PathSegment> {
+        val segments = mutableListOf<PathSegment>()
 
-        val regionCache = mutableMapOf<Triple<Int, Int, Int>, Collection<LadderEntity>>()
+        val firstDeparture = transitions.first().first
+        segments += segmentOrNull(
+            level = startFloor,
+            from = startOffset,
+            to = IntOffset(firstDeparture.x, firstDeparture.y),
+            costMap = startCostMap
+        ) ?: return emptyList()
 
-        suspend fun regionOf(entry: LadderEntity): Collection<LadderEntity> {
-            val key = Triple(entry.x, entry.y, entry.floor)
-            return regionCache.getOrPut(key) {
-                if (entry.floor !in bitmapCache) {
-                    bitmapCache[entry.floor] = withContext(Dispatchers.IO) {
-                        mapStitcher.stitch(entry.floor)
-                    }
-                }
-                getLaddersInRegion(IntOffset(entry.x, entry.y), entry.floor, bitmapCache)
-            }
+        for (index in 0 until transitions.size - 1) {
+            val arrival = transitions[index].second
+            val nextDeparture = transitions[index + 1].first
+            val costMap = costMapOf(arrival.floor) ?: return emptyList()
+
+            segments += segmentOrNull(
+                level = arrival.floor,
+                from = IntOffset(arrival.x, arrival.y),
+                to = IntOffset(nextDeparture.x, nextDeparture.y),
+                costMap = costMap
+            ) ?: return emptyList()
         }
 
-        data class State(
-            val ladders: Collection<LadderEntity>,
-            val path: List<Pair<LadderEntity, LadderEntity>>
-        )
+        val lastArrival = transitions.last().second
+        segments += segmentOrNull(
+            level = endFloor,
+            from = IntOffset(lastArrival.x, lastArrival.y),
+            to = endOffset,
+            costMap = endCostMap
+        ) ?: return emptyList()
 
-        val queue = ArrayDeque<State>()
-        val visited = mutableSetOf(startLadders.toSet())
-        queue.add(State(startLadders, emptyList()))
+        return segments
+    }
+
+    private suspend fun singleSegment(
+        level: Int,
+        from: IntOffset,
+        to: IntOffset,
+        costMap: CostMap
+    ): List<PathSegment> = segmentOrNull(level, from, to, costMap)?.let(::listOf) ?: emptyList()
+
+    private suspend fun segmentOrNull(
+        level: Int,
+        from: IntOffset,
+        to: IntOffset,
+        costMap: CostMap
+    ): PathSegment? {
+        val points = pathFinder.findPath(start = from, end = to, costMap = costMap)
+        return if (points.isEmpty()) null else PathSegment(level = level, points = points)
+    }
+
+    /**
+     * BFS over ladder connections. Regions are compared by identity, so the same physical area is
+     * never flood filled twice.
+     */
+    private suspend fun findLadderRoute(
+        startRegion: Region,
+        endRegion: Region
+    ): List<Pair<LadderEntity, LadderEntity>>? {
+        val visited = mutableSetOf(startRegion)
+        val queue = ArrayDeque<Pair<Region, List<Pair<LadderEntity, LadderEntity>>>>()
+        queue.add(startRegion to emptyList())
 
         while (queue.isNotEmpty()) {
-            val (currentLadders, path) = queue.removeFirst()
+            val (region, path) = queue.removeFirst()
 
-            for (ladder in currentLadders) {
-                val connected = ladderRepository.getConnectedLadder(ladder.x, ladder.y, ladder.floor)
-                    ?: continue
+            for (ladder in laddersIn(region = region)) {
+                val connected = ladderRepository.getConnectedLadder(
+                    ladder.x,
+                    ladder.y,
+                    ladder.floor
+                ) ?: continue
 
-                val nextLadders = regionOf(connected)
-                val nextSet = nextLadders.toSet()
+                val nextRegion = regionOf(
+                    point = IntOffset(connected.x, connected.y),
+                    floor = connected.floor
+                ) ?: continue
 
-                if (nextSet in visited) continue
-                visited.add(nextSet)
+                if (!visited.add(nextRegion)) {
+                    continue
+                }
 
                 val newPath = path + (ladder to connected)
+                if (nextRegion === endRegion) {
+                    return newPath
+                }
 
-                if (nextSet == endSet) return newPath
-
-                queue.add(State(nextLadders, newPath))
+                queue.add(nextRegion to newPath)
             }
         }
 
         return null
     }
 
-    private fun Int.isWalkable(): Boolean =
-        Color.red(this) != 255 || Color.green(this) != 255 || Color.blue(this) != 0
+    private suspend fun laddersIn(region: Region): List<LadderEntity> =
+        ladderRepository.getLaddersByCoordinates(
+            coordinates = JetMapConfig.Coordinates(
+                startX = region.minX,
+                startY = region.minY,
+                endX = region.maxX,
+                endY = region.maxY
+            ),
+            floorId = region.floor
+        ).filter { ladder -> region.contains(ladder.x, ladder.y) }
 
-    private fun Bitmap.computeRegion(startX: Int, startY: Int): RegionResult? {
-        if (!this[startX, startY].isWalkable()) return null
+    private suspend fun costMapOf(floor: Int): CostMap? = cacheMutex.withLock {
+        if (costMaps.containsKey(floor)) {
+            costMaps[floor]
+        } else {
+            mapStitcher.buildCostMap(floor = floor).also { costMaps[floor] = it }
+        }
+    }
 
-        val bits = BitSet(width * height)
+    /**
+     * Returns the walkable region containing the point, reusing an already computed one whenever
+     * possible. The previous implementation flood filled the whole floor once per ladder.
+     */
+    private suspend fun regionOf(point: IntOffset, floor: Int): Region? {
+        cacheMutex.withLock {
+            regions.firstOrNull { region ->
+                region.floor == floor && region.contains(point.x, point.y)
+            }
+        }?.let { return it }
+
+        val costMap = costMapOf(floor) ?: return null
+        val region = computeRegion(costMap = costMap, floor = floor, startX = point.x, startY = point.y)
+            ?: return null
+
+        return cacheMutex.withLock {
+            regions.firstOrNull { cached ->
+                cached.floor == floor && cached.contains(point.x, point.y)
+            } ?: region.also {
+                if (regions.size >= MAX_CACHED_REGIONS) {
+                    regions.removeAt(0)
+                }
+                regions.add(it)
+            }
+        }
+    }
+
+    /**
+     * Flood fills the walkable area around the point and returns it as a region whose bit set
+     * covers only its own bounding box, not the whole floor.
+     */
+    private fun computeRegion(
+        costMap: CostMap,
+        floor: Int,
+        startX: Int,
+        startY: Int
+    ): Region? {
+        if (!costMap.isWalkable(startX, startY)) {
+            return null
+        }
+
+        val width = costMap.width
+        val height = costMap.height
+        // Floor sized scratch, needed only while filling: the bounding box is unknown up front.
+        val visited = BitSet(width * height)
         val queue = ArrayDeque<Int>()
 
-        var minX = startX; var minY = startY
-        var maxX = startX; var maxY = startY
+        var minX = startX
+        var minY = startY
+        var maxX = startX
+        var maxY = startY
 
-        bits.set(startY * width + startX)
-        queue.add(startY * width + startX)
+        val startIndex = startY * width + startX
+        visited.set(startIndex)
+        queue.add(startIndex)
 
         while (queue.isNotEmpty()) {
             val current = queue.removeFirst()
-            val cx = current % width
-            val cy = current / width
+            val currentX = current % width
+            val currentY = current / width
 
-            for (i in NEIGHBOR_DX.indices) {
-                val nx = cx + NEIGHBOR_DX[i]
-                val ny = cy + NEIGHBOR_DY[i]
-                if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
-                val ni = ny * width + nx
-                if (bits.get(ni)) continue
-                if (this[nx, ny].isWalkable()) {
-                    bits.set(ni)
-                    if (nx < minX) minX = nx
-                    if (ny < minY) minY = ny
-                    if (nx > maxX) maxX = nx
-                    if (ny > maxY) maxY = ny
-                    queue.add(ni)
+            for (direction in NEIGHBOUR_DX.indices) {
+                val neighbourX = currentX + NEIGHBOUR_DX[direction]
+                val neighbourY = currentY + NEIGHBOUR_DY[direction]
+
+                if (neighbourX < 0 || neighbourY < 0 || neighbourX >= width || neighbourY >= height) {
+                    continue
                 }
+
+                val neighbourIndex = neighbourY * width + neighbourX
+                if (visited.get(neighbourIndex) || !costMap.isWalkable(neighbourX, neighbourY)) {
+                    continue
+                }
+
+                visited.set(neighbourIndex)
+                if (neighbourX < minX) minX = neighbourX
+                if (neighbourY < minY) minY = neighbourY
+                if (neighbourX > maxX) maxX = neighbourX
+                if (neighbourY > maxY) maxY = neighbourY
+                queue.add(neighbourIndex)
             }
         }
 
-        return RegionResult(bits, width, minX, minY, maxX, maxY)
+        val boundsWidth = maxX - minX + 1
+        val boundsHeight = maxY - minY + 1
+        val cells = BitSet(boundsWidth * boundsHeight)
+
+        // Re-index the filled cells relative to the bounding box, so a cached region keeps only
+        // its own area instead of a floor sized bit set.
+        var index = visited.nextSetBit(minY * width + minX)
+        val lastIndex = maxY * width + maxX
+        while (index in 0..lastIndex) {
+            val cellX = index % width
+            val cellY = index / width
+            if (cellX in minX..maxX) {
+                cells.set((cellY - minY) * boundsWidth + (cellX - minX))
+            }
+            index = visited.nextSetBit(index + 1)
+        }
+
+        return Region(
+            floor = floor,
+            cells = cells,
+            width = boundsWidth,
+            minX = minX,
+            minY = minY,
+            maxX = maxX,
+            maxY = maxY
+        )
     }
 
-    private suspend fun getLaddersInRegion(
-        point: IntOffset,
-        floor: Int,
-        bitmapCache: Map<Int, Bitmap?>
-    ): Collection<LadderEntity> = try {
-        val bitmap = bitmapCache[floor] ?: return listOf()
-        val region = bitmap.computeRegion(point.x, point.y) ?: return listOf()
+    /** Snaps a user picked point to the closest walkable cell of this floor. */
+    private fun CostMap.snap(offset: IntOffset): IntOffset? =
+        nearestWalkable(x = offset.x, y = offset.y)
+            ?.let { (x, y) -> IntOffset(x = x, y = y) }
 
-        withContext(Dispatchers.IO) {
-            ladderRepository.getLaddersByCoordinates(
-                coordinates = JetMapConfig.Coordinates(
-                    startX = region.minX, startY = region.minY,
-                    endX = region.maxX, endY = region.maxY
-                ),
-                floorId = floor
-            ).filter { ladder -> region.contains(ladder.x, ladder.y) }
-        }
-    } catch (_: Exception) {
-        listOf()
+    private companion object {
+        const val MAX_CACHED_REGIONS = 8
+        val NEIGHBOUR_DX = intArrayOf(0, 0, -1, 1, -1, -1, 1, 1)
+        val NEIGHBOUR_DY = intArrayOf(-1, 1, 0, 0, -1, 1, -1, 1)
     }
 }
+
+

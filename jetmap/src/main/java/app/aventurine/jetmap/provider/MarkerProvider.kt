@@ -9,15 +9,20 @@ interface MarkerProvider {
         markerDescriptor: MarkerDescriptor
     ): InputStream?
 
+    /**
+     * Returns the marker under the tap, or `null` when the user tapped empty space.
+     * Implementations must not fabricate a marker from the raw coordinates.
+     */
     suspend fun getMarker(
         x: Int,
         y: Int,
         z: Int,
         tapArea: Float
-    ): MarkerDescriptor
+    ): MarkerDescriptor?
 
     suspend fun getMarkers(
         visibleAreaRect: Rect,
         level: Int
     ): List<MarkerDescriptor>
 }
+

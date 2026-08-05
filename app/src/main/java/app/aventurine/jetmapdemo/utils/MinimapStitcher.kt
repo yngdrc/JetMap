@@ -3,14 +3,19 @@ package app.aventurine.jetmapdemo.utils
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import app.aventurine.jetmap.controller.tile.TerrainType
 import app.aventurine.jetmap.domain.models.MapConfigEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import androidx.core.graphics.createBitmap
 
+/**
+ * Builds the pathfinding [CostMap] of a floor directly from the minimap tiles.
+ *
+ * The previous implementation allocated a full ARGB_8888 bitmap of the whole floor
+ * (8192x8192 = 256 MB) which reliably ran out of memory. Now only one tile is decoded at a time
+ * and immediately folded into a one byte per cell grid.
+ */
 class MinimapStitcher(
     context: Context,
     private val mapConfig: MapConfigEntity,
@@ -24,41 +29,60 @@ class MinimapStitcher(
         val fileName: String
     )
 
-    suspend fun stitch(
+    /** Directory listing is expensive; index it once instead of on every route request. */
+    @Volatile
+    private var index: Map<Int, List<TileInfo>>? = null
+
+    private val decodeOptions = BitmapFactory.Options().apply {
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+        // Density scaling would shift the colours, and colour *is* the terrain cost here.
+        inScaled = false
+    }
+
+    suspend fun buildCostMap(
         floor: Int
-    ): Bitmap? = withContext(Dispatchers.IO) {
-        val tiles = listTiles(floor)
-        if (tiles.isEmpty()) return@withContext null
+    ): CostMap? = withContext(Dispatchers.IO) {
+        val tiles = tilesOf(floor = floor)
+        if (tiles.isEmpty()) {
+            return@withContext null
+        }
 
-        val result = createBitmap(mapConfig.width, mapConfig.height)
-        val canvas = Canvas(result)
+        val costMap = CostMap(width = mapConfig.width, height = mapConfig.height)
 
-        for (tile in tiles) {
-            val bitmap = File(
-                folder,
-                tile.fileName
-            ).inputStream().use {
-                BitmapFactory.decodeStream(it, null, null)
-            } ?: continue
+        tiles.forEach { tile ->
+            val bitmap = runCatching {
+                File(folder, tile.fileName).inputStream().use { stream ->
+                    BitmapFactory.decodeStream(stream, null, decodeOptions)
+                }
+            }.getOrNull() ?: return@forEach
 
-            canvas.drawBitmap(
-                bitmap,
-                (tile.x - mapConfig.minX).toFloat(),
-                (tile.y - mapConfig.minY).toFloat(),
-                null
+            val pixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+
+            costMap.writeTile(
+                pixels = pixels,
+                tileWidth = bitmap.width,
+                tileHeight = bitmap.height,
+                originX = tile.x - mapConfig.minX,
+                originY = tile.y - mapConfig.minY
             )
 
+            // Safe here: the bitmap is local and never handed to the renderer.
             bitmap.recycle()
         }
 
-        result
+        costMap
     }
 
-    private fun listTiles(floor: Int): List<TileInfo> =
-        folder.listFiles()
-            ?.mapNotNull { parseFileName(it.name) }
-            ?.filter { it.floor == floor }
-            ?: emptyList()
+    private fun tilesOf(floor: Int): List<TileInfo> {
+        val cached = index ?: buildIndex().also { index = it }
+        return cached[floor].orEmpty()
+    }
+
+    private fun buildIndex(): Map<Int, List<TileInfo>> = folder.listFiles()
+        ?.mapNotNull { file -> parseFileName(file.name) }
+        ?.groupBy { it.floor }
+        ?: emptyMap()
 
     private fun parseFileName(fileName: String): TileInfo? {
         if (!fileName.startsWith(filePrefix) || !fileName.endsWith(".png")) return null
